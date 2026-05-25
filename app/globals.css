@@ -1,0 +1,35 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-headline: var(--font-headline), ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary: #00628c;
+  --color-primary-container: #007cb0;
+  --color-on-primary: #ffffff;
+  --color-secondary: #964900;
+  --color-secondary-container: #fc820c;
+  --color-tertiary: #4a6500;
+  --color-tertiary-fixed: #bff444;
+  --color-on-tertiary-fixed: #141f00;
+  --color-surface: #fcf9f8;
+  --color-on-surface: #1b1c1c;
+  --color-on-surface-variant: #3e4850;
+  --color-outline: #6f7881;
+  --color-outline-variant: #bec8d1;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-surface-container: #f0eded;
+  --color-surface-container-low: #f6f3f2;
+  --color-surface-container-lowest: #ffffff;
+}
+
+@layer base {
+  * {
+    @apply border-outline-variant/20;
+  }
+  body {
+    @apply bg-surface text-on-surface;
+  }
+}
