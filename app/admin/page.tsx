@@ -2877,18 +2877,18 @@ export default function Dashboard() {
                   {/* Contact Info for Business */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {selectedNegocio.contact_email && (
-                      <div className="p-4 bg-surface-container rounded-2xl border border-outline-variant/10">
+                      <div className="p-4 bg-surface-container rounded-2xl border border-outline-variant/10 min-w-0">
                         <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-1">E-mail de Contato</p>
-                        <a href={`mailto:${selectedNegocio.contact_email}`} className="text-sm font-bold text-primary hover:underline flex items-center gap-2">
-                          <Mail className="w-4 h-4" /> {selectedNegocio.contact_email}
+                        <a href={`mailto:${selectedNegocio.contact_email}`} className="text-sm font-bold text-primary hover:underline flex items-center gap-2 break-all">
+                          <Mail className="w-4 h-4 shrink-0" /> <span className="break-all">{selectedNegocio.contact_email}</span>
                         </a>
                       </div>
                     )}
                     {selectedNegocio.contact_phone && (
-                      <div className="p-4 bg-surface-container rounded-2xl border border-outline-variant/10">
+                      <div className="p-4 bg-surface-container rounded-2xl border border-outline-variant/10 min-w-0">
                         <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-1">Telefone / WhatsApp</p>
-                        <a href={`tel:${selectedNegocio.contact_phone}`} className="text-sm font-bold text-primary hover:underline flex items-center gap-2">
-                          <Phone className="w-4 h-4" /> {selectedNegocio.contact_phone}
+                        <a href={`tel:${selectedNegocio.contact_phone}`} className="text-sm font-bold text-primary hover:underline flex items-center gap-2 break-all">
+                          <Phone className="w-4 h-4 shrink-0" /> <span className="break-all">{selectedNegocio.contact_phone}</span>
                         </a>
                       </div>
                     )}

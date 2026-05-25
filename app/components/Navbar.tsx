@@ -135,15 +135,15 @@ export function Navbar() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden fixed top-20 w-full bg-white border-b border-[#bec8d1]/20 overflow-hidden z-[60]"
+            className="lg:hidden fixed top-20 w-full bg-white border-b border-[#bec8d1]/20 overflow-y-auto max-h-[calc(100vh-5rem)] z-[60]"
           >
-            <div className="flex flex-col p-6 space-y-4">
+            <div className="flex flex-col p-5 space-y-2.5">
               {navLinks.map((link) => (
-                <div key={link.name} className="space-y-2">
+                <div key={link.name} className="space-y-1">
                   <Link 
                     onClick={() => !link.subItems && setIsMenuOpen(false)} 
                     href={link.href} 
-                    className={cn("flex items-center justify-between gap-3 font-bold py-2", pathname === link.href ? "text-[#00628c]" : "text-[#3e4850]")}
+                    className={cn("flex items-center justify-between gap-3 font-bold py-1.5 text-sm", pathname === link.href ? "text-[#00628c]" : "text-[#3e4850]")}
                   >
                     <div className="flex items-center gap-3">
                       <span className={pathname === link.href ? "text-[#00628c]" : "text-[#6f7881]"}>
@@ -154,13 +154,13 @@ export function Navbar() {
                   </Link>
                   
                   {link.subItems && (
-                    <div className="pl-10 space-y-3 py-2">
+                    <div className="pl-8 space-y-2 py-1">
                       {link.subItems.map((sub) => (
                         <Link 
                           key={sub.name}
                           onClick={() => setIsMenuOpen(false)}
                           href={sub.href}
-                          className="flex items-center gap-3 text-sm font-bold text-[#6f7881] hover:text-[#00628c]"
+                          className="flex items-center gap-3 text-xs font-bold text-[#6f7881] hover:text-[#00628c] py-1"
                         >
                           {sub.name}
                         </Link>
@@ -169,13 +169,13 @@ export function Navbar() {
                   )}
                 </div>
               ))}
-              <div className="pt-4 border-t border-[#bec8d1]/10">
+              <div className="pt-3 border-t border-[#bec8d1]/10">
                 <button 
                   onClick={() => {
                     setIsMenuOpen(false);
                     setIsRegisterModalOpen(true);
                   }} 
-                  className="w-full py-4 text-center bg-[#00628c] text-white font-bold rounded-2xl"
+                  className="w-full py-3 text-center bg-[#00628c] text-white font-bold rounded-xl text-sm hover:bg-[#004e70] transition-colors"
                 >
                   Cadastrar-se Agora
                 </button>

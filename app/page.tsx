@@ -333,7 +333,7 @@ export default function LandingPage() {
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
               >
-                <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+                <div className="p-6 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar w-full">
                   <button 
                     onClick={() => setSelectedJob(null)}
                     className="absolute top-6 right-6 p-2 bg-[#f6f3f2] rounded-full text-[#3e4850] hover:bg-[#00628c] hover:text-white transition-all z-10"
@@ -438,20 +438,20 @@ export default function LandingPage() {
                     {(selectedJob.contact_email || selectedJob.contact_phone || (selectedJob as any).email || (selectedJob as any).phone) && (
                       <div className="p-6 bg-[#00628c] rounded-3xl text-white">
                         <h4 className="text-xs font-black uppercase tracking-widest mb-4 opacity-70">Contato</h4>
-                        <div className="flex flex-col sm:flex-row gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
                           {(selectedJob.contact_email || (selectedJob as any).email) && (
-                            <div className="space-y-1">
+                            <div className="space-y-1 min-w-0">
                               <p className="text-[10px] uppercase font-bold opacity-50">E-mail</p>
-                              <a href={`mailto:${selectedJob.contact_email || (selectedJob as any).email}`} className="font-bold hover:underline flex items-center gap-2">
-                                <Mail className="w-4 h-4" /> {selectedJob.contact_email || (selectedJob as any).email}
+                              <a href={`mailto:${selectedJob.contact_email || (selectedJob as any).email}`} className="font-bold hover:underline flex items-center gap-2 break-all text-sm sm:text-base">
+                                <Mail className="w-4 h-4 shrink-0" /> <span className="break-all">{selectedJob.contact_email || (selectedJob as any).email}</span>
                               </a>
                             </div>
                           )}
                           {(selectedJob.contact_phone || (selectedJob as any).phone) && (
-                            <div className="space-y-1">
+                            <div className="space-y-1 min-w-0">
                               <p className="text-[10px] uppercase font-bold opacity-50">Telefone</p>
-                              <a href={`tel:${selectedJob.contact_phone || (selectedJob as any).phone}`} className="font-bold hover:underline flex items-center gap-2">
-                                <Phone className="w-4 h-4" /> {selectedJob.contact_phone || (selectedJob as any).phone}
+                              <a href={`tel:${selectedJob.contact_phone || (selectedJob as any).phone}`} className="font-bold hover:underline flex items-center gap-2 break-all text-sm sm:text-base">
+                                <Phone className="w-4 h-4 shrink-0" /> <span className="break-all">{selectedJob.contact_phone || (selectedJob as any).phone}</span>
                               </a>
                             </div>
                           )}
@@ -487,7 +487,7 @@ export default function LandingPage() {
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
               >
-                <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+                <div className="p-6 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar w-full">
                   <button 
                     onClick={() => setSelectedCandidate(null)}
                     className="absolute top-6 right-6 p-2 bg-[#f6f3f2] rounded-full text-[#3e4850] hover:bg-[#00628c] hover:text-white transition-all z-10"
@@ -563,23 +563,23 @@ export default function LandingPage() {
 
                     <div className="p-8 bg-[#00628c] rounded-3xl text-white shadow-xl shadow-[#00628c]/20">
                       <h4 className="text-xs font-black uppercase tracking-widest mb-6 opacity-70">Entrar em Contato</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 w-full">
+                        <div className="space-y-2 min-w-0">
                           <p className="text-[10px] uppercase font-black opacity-50 tracking-widest">E-mail</p>
-                          <a href={`mailto:${selectedCandidate.email}`} className="text-lg font-bold hover:underline flex items-center gap-3">
+                          <a href={`mailto:${selectedCandidate.email}`} className="text-sm sm:text-base md:text-lg font-bold hover:underline flex items-center gap-3 break-all">
                             <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
                               <Mail className="w-5 h-5 text-white" />
                             </div>
-                            {selectedCandidate.email}
+                            <span className="break-all">{selectedCandidate.email}</span>
                           </a>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-w-0">
                           <p className="text-[10px] uppercase font-black opacity-50 tracking-widest">Telefone / WhatsApp</p>
-                          <a href={`https://wa.me/${selectedCandidate.phone?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-lg font-bold hover:underline flex items-center gap-3">
+                          <a href={`https://wa.me/${selectedCandidate.phone?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm sm:text-base md:text-lg font-bold hover:underline flex items-center gap-3 break-all">
                             <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
                               <Phone className="w-5 h-5 text-white" />
                             </div>
-                            {selectedCandidate.phone}
+                            <span className="break-all">{selectedCandidate.phone}</span>
                           </a>
                         </div>
                       </div>
@@ -638,7 +638,7 @@ export default function LandingPage() {
 
                     <div className="flex-grow mb-6">
                       <p className="text-[#3e4850] text-sm leading-relaxed line-clamp-5 italic">
-                        &quot;{cand.summary || "Profissional dedicado em busca de novas oportunidades para crescer e contribuir com o mercado de trabalho através de suas competências."}&quot;
+                        {cand.summary ? stripHtml(cand.summary) : "Profissional dedicado em busca de novas oportunidades para crescer e contribuir com o mercado de trabalho através de suas competências."}
                       </p>
                     </div>
 

@@ -33,3 +33,50 @@
     @apply bg-surface text-on-surface;
   }
 }
+
+/* Evitar quebras indesejadas e forçar quebra de linha em descrições de vagas/talentos/notícias */
+.rich-text-content, .news-content {
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+  white-space: normal !important;
+  max-width: 100% !important;
+}
+
+.rich-text-content *, .news-content * {
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+  white-space: normal !important;
+  max-width: 100% !important;
+}
+
+.rich-text-content p, .news-content p {
+  margin-bottom: 1rem !important;
+  line-height: 1.6 !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+.rich-text-content ul, 
+.rich-text-content ol {
+  padding-left: 1.5rem !important;
+  margin-bottom: 1rem !important;
+  list-style-type: disc !important;
+}
+
+.rich-text-content li {
+  margin-bottom: 0.5rem !important;
+}
+
+.rich-text-content pre,
+.rich-text-content code {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+}
+
+.rich-text-content img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+

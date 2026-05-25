@@ -229,39 +229,6 @@ export default function TalentosPage() {
                         </button>
                       ))}
                     </div>
-
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#3e4850] mb-6">Disponibilidade</h3>
-                    <div className="space-y-4">
-                      {['Imediata', 'Em 15 dias', 'Em 30 dias'].map((type) => (
-                        <label key={type} className="flex items-center gap-3 cursor-pointer group">
-                          <input type="checkbox" className="w-5 h-5 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/20" />
-                          <span className="text-sm font-medium text-[#3e4850] group-hover:text-[#00628c] transition-colors">{type}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#3e4850] mb-6">Localização</h3>
-                    <div className="space-y-4">
-                      {['Remoto', 'Híbrido', 'Presencial'].map((type) => (
-                        <label key={type} className="flex items-center gap-3 cursor-pointer group">
-                          <input type="checkbox" className="w-5 h-5 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/20" />
-                          <span className="text-sm font-medium text-[#3e4850] group-hover:text-[#00628c] transition-colors">{type}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#3e4850] mb-6">Experiência</h3>
-                    <select className="w-full p-4 rounded-2xl border-none bg-[#f0eded] text-[#1b1c1c] font-bold focus:ring-2 focus:ring-[#00628c]/40 cursor-pointer">
-                      <option>Qualquer nível</option>
-                      <option>Júnior (0-2 anos)</option>
-                      <option>Pleno (3-5 anos)</option>
-                      <option>Sênior (6+ anos)</option>
-                      <option>Especialista / Gestor</option>
-                    </select>
                   </div>
                 </motion.div>
               )}
@@ -418,7 +385,7 @@ export default function TalentosPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+              <div className="p-6 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar w-full">
                 <button 
                   onClick={() => setSelectedCandidate(null)}
                   className="absolute top-6 right-6 p-2 bg-[#f6f3f2] rounded-full text-[#3e4850] hover:bg-[#00628c] hover:text-white transition-all z-10"
@@ -494,23 +461,23 @@ export default function TalentosPage() {
 
                   <div className="p-8 bg-[#00628c] rounded-3xl text-white shadow-xl shadow-[#00628c]/20">
                     <h4 className="text-xs font-black uppercase tracking-widest mb-6 opacity-70">Entrar em Contato</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 w-full">
+                      <div className="space-y-2 min-w-0">
                         <p className="text-[10px] uppercase font-black opacity-50 tracking-widest">E-mail</p>
-                        <a href={`mailto:${selectedCandidate.email}`} className="text-lg font-bold hover:underline flex items-center gap-3">
+                        <a href={`mailto:${selectedCandidate.email}`} className="text-sm sm:text-base md:text-lg font-bold hover:underline flex items-center gap-3 break-all">
                           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
                             <Mail className="w-5 h-5 text-white" />
                           </div>
-                          {selectedCandidate.email}
+                          <span className="break-all">{selectedCandidate.email}</span>
                         </a>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-2 min-w-0">
                         <p className="text-[10px] uppercase font-black opacity-50 tracking-widest">Telefone / WhatsApp</p>
-                        <a href={`https://wa.me/${selectedCandidate.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-lg font-bold hover:underline flex items-center gap-3">
+                        <a href={`https://wa.me/${selectedCandidate.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm sm:text-base md:text-lg font-bold hover:underline flex items-center gap-3 break-all">
                           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
                             <Phone className="w-5 h-5 text-white" />
                           </div>
-                          {selectedCandidate.phone}
+                          <span className="break-all">{selectedCandidate.phone}</span>
                         </a>
                       </div>
                     </div>

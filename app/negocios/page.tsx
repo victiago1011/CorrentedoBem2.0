@@ -375,7 +375,7 @@ function NegociosContent() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+              <div className="p-6 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar w-full">
                 <button 
                   onClick={() => setSelectedNegocio(null)}
                   className="absolute top-6 right-6 p-2 bg-[#f6f3f2] rounded-full text-[#3e4850] hover:bg-[#00628c] hover:text-white transition-all z-10"
@@ -468,19 +468,19 @@ function NegociosContent() {
               <div className="p-6 md:p-8 bg-[#f6f3f2] border-t border-[#bec8d1]/10">
                 <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                   <p className="text-xs text-[#6f7881] font-medium italic">Oportunidade anunciada através do Corrente do Bem</p>
-                  <div className="flex flex-wrap justify-center gap-4">
+                  <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-4 min-w-0 max-w-full">
                     {selectedNegocio.contact_email && (
-                      <div className="flex flex-col items-center md:items-end">
+                      <div className="flex flex-col items-center sm:items-end min-w-0">
                         <span className="text-[10px] font-black uppercase tracking-widest text-[#6f7881]">E-mail</span>
-                        <a href={`mailto:${selectedNegocio.contact_email}`} className="text-sm font-bold text-[#00628c] hover:underline">
+                        <a href={`mailto:${selectedNegocio.contact_email}`} className="text-sm font-bold text-[#00628c] hover:underline break-all block text-center sm:text-right">
                           {selectedNegocio.contact_email}
                         </a>
                       </div>
                     )}
                     {selectedNegocio.contact_phone && (
-                      <div className="flex flex-col items-center md:items-end">
+                      <div className="flex flex-col items-center sm:items-end min-w-0">
                         <span className="text-[10px] font-black uppercase tracking-widest text-[#6f7881]">Telefone / WhatsApp</span>
-                        <a href={`https://wa.me/${selectedNegocio.contact_phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-[#00628c] hover:underline">
+                        <a href={`https://wa.me/${selectedNegocio.contact_phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-[#00628c] hover:underline break-all block text-center sm:text-right">
                           {selectedNegocio.contact_phone}
                         </a>
                       </div>

@@ -244,49 +244,6 @@ function VagasContent() {
                       ))}
                     </div>
                   </div>
-
-                  <div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#3e4850] mb-6">Disponibilidade</h3>
-                    <div className="space-y-4">
-                      {['Remoto', 'Presencial', 'Híbrido'].map((type) => (
-                        <label key={type} className="flex items-center gap-3 cursor-pointer group">
-                          <input 
-                            type="checkbox" 
-                            className="w-5 h-5 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/20" 
-                            checked={selectedTypes.includes(type)}
-                            onChange={() => toggleType(type)}
-                          />
-                          <span className="text-sm font-medium text-[#3e4850] group-hover:text-[#00628c] transition-colors">{type}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#3e4850] mb-6">Nível de Experiência</h3>
-                    <div className="space-y-4">
-                      {['Estágio', 'Júnior', 'Pleno/Sênior'].map((level) => (
-                        <label key={level} className="flex items-center gap-3 cursor-pointer group">
-                          <input 
-                            type="radio" 
-                            name="level" 
-                            className="w-5 h-5 border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/20" 
-                            checked={selectedLevel === level}
-                            onChange={() => setSelectedLevel(level)}
-                          />
-                          <span className="text-sm font-medium text-[#3e4850] group-hover:text-[#00628c] transition-colors">{level}</span>
-                        </label>
-                      ))}
-                      {selectedLevel && (
-                        <button 
-                          onClick={() => setSelectedLevel(null)}
-                          className="text-[10px] font-bold text-[#00628c] uppercase tracking-wider hover:underline"
-                        >
-                          Limpar Nível
-                        </button>
-                      )}
-                    </div>
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -439,7 +396,7 @@ function VagasContent() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+              <div className="p-6 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar w-full">
                 <button 
                   onClick={() => setSelectedJob(null)}
                   className="absolute top-6 right-6 p-2 bg-[#f6f3f2] rounded-full text-[#3e4850] hover:bg-[#00628c] hover:text-white transition-all z-10"
@@ -544,20 +501,20 @@ function VagasContent() {
                   {(selectedJob.contact_email || selectedJob.contact_phone || (selectedJob as any).email || (selectedJob as any).phone) && (
                     <div className="p-6 bg-[#00628c] rounded-3xl text-white">
                       <h4 className="text-xs font-black uppercase tracking-widest mb-4 opacity-70">Contato</h4>
-                      <div className="flex flex-col sm:flex-row gap-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
                         {(selectedJob.contact_email || (selectedJob as any).email) && (
-                          <div className="space-y-1">
+                          <div className="space-y-1 min-w-0">
                             <p className="text-[10px] uppercase font-bold opacity-50">E-mail</p>
-                            <a href={`mailto:${selectedJob.contact_email || (selectedJob as any).email}`} className="font-bold hover:underline flex items-center gap-2">
-                              <Mail className="w-4 h-4" /> {selectedJob.contact_email || (selectedJob as any).email}
+                            <a href={`mailto:${selectedJob.contact_email || (selectedJob as any).email}`} className="font-bold hover:underline flex items-center gap-2 break-all text-sm sm:text-base">
+                              <Mail className="w-4 h-4 shrink-0" /> <span className="break-all">{selectedJob.contact_email || (selectedJob as any).email}</span>
                             </a>
                           </div>
                         )}
                         {(selectedJob.contact_phone || (selectedJob as any).phone) && (
-                          <div className="space-y-1">
+                          <div className="space-y-1 min-w-0">
                             <p className="text-[10px] uppercase font-bold opacity-50">Telefone</p>
-                            <a href={`tel:${selectedJob.contact_phone || (selectedJob as any).phone}`} className="font-bold hover:underline flex items-center gap-2">
-                              <Phone className="w-4 h-4" /> {selectedJob.contact_phone || (selectedJob as any).phone}
+                            <a href={`tel:${selectedJob.contact_phone || (selectedJob as any).phone}`} className="font-bold hover:underline flex items-center gap-2 break-all text-sm sm:text-base">
+                              <Phone className="w-4 h-4 shrink-0" /> <span className="break-all">{selectedJob.contact_phone || (selectedJob as any).phone}</span>
                             </a>
                           </div>
                         )}

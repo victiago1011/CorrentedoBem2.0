@@ -21,7 +21,14 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
-import { cn } from '@/lib/utils';
+import { cn, stripHtml } from '@/lib/utils';
+
+const getNewsPreview = (content: string, excerpt?: string, maxLength = 150) => {
+  const baseText = excerpt && excerpt.trim() ? excerpt : content;
+  const cleanText = stripHtml(baseText);
+  if (cleanText.length <= maxLength) return cleanText;
+  return cleanText.substring(0, maxLength).trim() + '...';
+};
 
 interface Noticia {
   id: string;
@@ -169,7 +176,7 @@ export default function NoticiasPage() {
                           {highlights[0].title}
                         </h2>
                         <p className="text-[#3e4850] text-base lg:text-lg opacity-70 line-clamp-2 leading-relaxed">
-                          {highlights[0].excerpt || highlights[0].content.substring(0, 180).trim() + '...'}
+                          {getNewsPreview(highlights[0].content, highlights[0].excerpt, 180)}
                         </p>
                       </div>
                     </Link>
@@ -260,7 +267,7 @@ export default function NoticiasPage() {
                         {news.title}
                       </h3>
                       <p className="text-[#3e4850] opacity-50 text-base line-clamp-2 md:line-clamp-1 leading-relaxed mb-4">
-                        {news.excerpt || news.content.substring(0, 150).trim() + '...'}
+                        {getNewsPreview(news.content, news.excerpt, 150)}
                       </p>
                       <div className="flex items-center gap-2 text-[#00628c] font-black text-[10px] uppercase tracking-[0.2em] group-hover:gap-4 transition-all opacity-0 group-hover:opacity-100">
                         Ler notícia completa <ArrowRight className="w-3 h-3" />

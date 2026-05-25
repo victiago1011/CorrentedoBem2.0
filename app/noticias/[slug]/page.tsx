@@ -258,19 +258,30 @@ export default function NoticiaDetailPage() {
 
       {/* Styled JSX for content consistency */}
       <style jsx global>{`
-        .news-content p { margin-bottom: 1.5rem; font-size: 1.125rem; }
+        .news-content {
+          word-break: break-word !important;
+          overflow-wrap: break-word !important;
+          white-space: normal !important;
+        }
+        .news-content p { 
+          margin-bottom: 1.5rem; 
+          font-size: 1.125rem; 
+          word-break: break-word !important;
+          overflow-wrap: break-word !important;
+          white-space: normal !important;
+        }
         @media (max-width: 768px) {
           .news-content p { font-size: 1rem; }
         }
-        .news-content h2 { font-size: 1.5rem; margin-top: 2.5rem; margin-bottom: 1rem; font-weight: 900; line-height: 1.2; }
-        .news-content h3 { font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.75rem; font-weight: 800; }
-        .news-content blockquote { border-left-width: 4px; border-color: #00628c; padding-left: 1.5rem; font-style: italic; color: #4b5563; font-weight: 500; margin: 2rem 0; }
+        .news-content h2 { font-size: 1.5rem; margin-top: 2.5rem; margin-bottom: 1rem; font-weight: 900; line-height: 1.2; word-break: break-word !important; }
+        .news-content h3 { font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.75rem; font-weight: 800; word-break: break-word !important; }
+        .news-content blockquote { border-left-width: 4px; border-color: #00628c; padding-left: 1.5rem; font-style: italic; color: #4b5563; font-weight: 500; margin: 2rem 0; word-break: break-word !important; }
         .news-content ul, .news-content ol { padding-left: 1.5rem; margin-bottom: 1.5rem; }
-        .news-content li { margin-bottom: 0.5rem; font-size: 1.125rem; }
+        .news-content li { margin-bottom: 0.5rem; font-size: 1.125rem; word-break: break-word !important; }
         @media (max-width: 768px) {
           .news-content li { font-size: 1rem; }
         }
-        .news-content img { border-radius: 0.75rem; margin: 2rem 0; }
+        .news-content img { border-radius: 0.75rem; margin: 2rem 0; max-width: 100%; height: auto; }
       `}</style>
 
       <Footer />

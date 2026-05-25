@@ -97,6 +97,16 @@ export default function CadastrarNegocioPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validar e-mail de forma permissiva para aceitar caracteres com acento (Ex: dedé@gmail.com)
+    if (formData.contact_email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.contact_email)) {
+        alert('Por favor, insira um e-mail válido.');
+        return;
+      }
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -284,7 +294,7 @@ export default function CadastrarNegocioPage() {
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6f7881]" />
                   <input 
-                    type="email" 
+                    type="text" 
                     placeholder="contato@exemplo.com" 
                     className="w-full pl-12 pr-4 py-4 bg-[#f6f3f2] border-none rounded-2xl focus:ring-2 focus:ring-[#00628c]/40 transition-all text-[#1b1c1c]"
                     value={formData.contact_email}
