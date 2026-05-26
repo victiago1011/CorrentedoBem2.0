@@ -537,10 +537,17 @@ export default function Dashboard() {
   const [richDescription, setRichDescription] = useState('');
   const [richSummary, setRichSummary] = useState('');
   const [richDescriptionNegocio, setRichDescriptionNegocio] = useState('');
+  const [newJobSalaryNegotiable, setNewJobSalaryNegotiable] = useState(false);
+  const [editingJobSalaryNegotiable, setEditingJobSalaryNegotiable] = useState(false);
 
   useEffect(() => {
-    if (editingJob) setRichDescription(editingJob.description || '');
-    else if (!isAddingJob) setRichDescription('');
+    if (editingJob) {
+      setRichDescription(editingJob.description || '');
+      setEditingJobSalaryNegotiable(editingJob.salary === 'A combinar');
+    } else if (!isAddingJob) {
+      setRichDescription('');
+      setEditingJobSalaryNegotiable(false);
+    }
   }, [editingJob, isAddingJob]);
 
   useEffect(() => {
@@ -844,6 +851,7 @@ export default function Dashboard() {
     if (data && !error) {
       setJobs(prev => [data, ...prev]);
       setIsAddingJob(false);
+      setNewJobSalaryNegotiable(false);
       
       const historyEntry = {
         action: 'Vaga Criada',
@@ -2358,7 +2366,7 @@ export default function Dashboard() {
                     location: formData.get('location') as string,
                     type: formData.get('type') as string,
                     area: formData.get('area') as string,
-                    salary: formData.get('salary') as string,
+                    salary: newJobSalaryNegotiable ? 'A combinar' : (formData.get('salary') as string || ''),
                     description: richDescription,
                     requirements: (formData.get('requirements') as string).split('\n').filter(r => r.trim()),
                   });
@@ -2377,7 +2385,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-on-surface-variant uppercase">E-mail de Contato</label>
-                      <input name="email" type="email" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="contato@empresa.com" />
+                      <input name="email" type="text" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="contato@empresa.com" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-on-surface-variant uppercase">Telefone / WhatsApp</label>
@@ -2420,8 +2428,28 @@ export default function Dashboard() {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">Salário</label>
-                      <input name="salary" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="Ex: R$ 5.000" />
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-bold text-on-surface-variant uppercase">Salário</label>
+                        <label className="inline-flex items-center gap-1.5 text-xs font-bold text-primary cursor-pointer select-none">
+                          <input 
+                            type="checkbox"
+                            className="rounded border-outline-variant text-primary focus:ring-primary/40"
+                            checked={newJobSalaryNegotiable}
+                            onChange={(e) => setNewJobSalaryNegotiable(e.target.checked)}
+                          />
+                          A combinar
+                        </label>
+                      </div>
+                      <input 
+                        name="salary" 
+                        disabled={newJobSalaryNegotiable}
+                        placeholder={newJobSalaryNegotiable ? 'A combinar' : 'Ex: R$ 5.000'}
+                        className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none disabled:opacity-50"
+                        onInput={(e) => {
+                          const input = e.target as HTMLInputElement;
+                          input.value = maskCurrency(input.value);
+                        }}
+                      />
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -3056,7 +3084,7 @@ export default function Dashboard() {
                 location: formData.get('location') as string,
                 type: formData.get('type') as string,
                 area: formData.get('area') as string,
-                salary: formData.get('salary') as string,
+                salary: editingJobSalaryNegotiable ? 'A combinar' : (formData.get('salary') as string || ''),
                 site_url: formData.get('site_url') as string,
                 description: richDescription,
                 requirements: (formData.get('requirements') as string).split('\n').filter(r => r.trim()),
@@ -3092,7 +3120,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-on-surface-variant uppercase">E-mail de Contato</label>
-                  <input name="email" type="email" defaultValue={editingJob.email} className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" />
+                  <input name="email" type="text" defaultValue={editingJob.email} className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-on-surface-variant uppercase">Telefone / WhatsApp</label>
@@ -3140,11 +3168,25 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-on-surface-variant uppercase">Salário</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-on-surface-variant uppercase">Salário</label>
+                    <label className="inline-flex items-center gap-1.5 text-xs font-bold text-primary cursor-pointer select-none">
+                      <input 
+                        type="checkbox"
+                        className="rounded border-outline-variant text-primary focus:ring-primary/40"
+                        checked={editingJobSalaryNegotiable}
+                        onChange={(e) => setEditingJobSalaryNegotiable(e.target.checked)}
+                      />
+                      A combinar
+                    </label>
+                  </div>
                   <input 
+                    key={editingJob.id + '-' + editingJobSalaryNegotiable}
                     name="salary" 
-                    defaultValue={editingJob.salary} 
-                    className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none"
+                    disabled={editingJobSalaryNegotiable}
+                    defaultValue={editingJobSalaryNegotiable ? '' : (editingJob.salary === 'A combinar' ? '' : editingJob.salary)} 
+                    placeholder={editingJobSalaryNegotiable ? 'A combinar' : 'Ex: R$ 5.000'}
+                    className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none disabled:opacity-50"
                     onInput={(e) => {
                       const input = e.target as HTMLInputElement;
                       input.value = maskCurrency(input.value);

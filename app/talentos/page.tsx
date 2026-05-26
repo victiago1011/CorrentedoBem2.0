@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   Search, 
   MapPin, 
@@ -83,15 +84,22 @@ interface Candidate {
   created_at?: string;
 }
 
-export default function TalentosPage() {
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+function TalentosContent() {
+  const searchParams = useSearchParams();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState(searchParams?.get('search') || '');
-  const [selectedCategory, setSelectedCategory] = useState(searchParams?.get('category') || 'Todos os Talentos');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'Todos os Talentos');
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersVisible, setIsFiltersVisible] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsFiltersVisible(true);
+    }
+  }, []);
   const itemsPerPage = 6;
 
   const categories = [
@@ -491,5 +499,17 @@ export default function TalentosPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function TalentosPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#fcf9f8] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-[#00628c]/20 border-t-[#00628c] rounded-full animate-spin"></div>
+      </div>
+    }>
+      <TalentosContent />
+    </Suspense>
   );
 }

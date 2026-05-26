@@ -342,14 +342,32 @@ export default function CadastrarVagaPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-[#3e4850] ml-1">Salário / Remuneração</label>
+                <div className="flex justify-between items-center ml-1">
+                  <label className="text-xs font-black uppercase tracking-widest text-[#3e4850]">Salário / Remuneração</label>
+                  <label className="inline-flex items-center gap-2 text-xs font-bold text-[#00628c] cursor-pointer select-none">
+                    <input 
+                      type="checkbox"
+                      className="rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/40"
+                      checked={formData.salary === 'A combinar'}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setFormData({ ...formData, salary: 'A combinar' });
+                        } else {
+                          setFormData({ ...formData, salary: '' });
+                        }
+                      }}
+                    />
+                    A combinar
+                  </label>
+                </div>
                 <div className="relative">
                   <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6f7881]" />
                   <input 
                     type="text" 
-                    placeholder="Ex: R$ 2.500,00" 
-                    className="w-full pl-12 pr-4 py-4 bg-[#f6f3f2] border-none rounded-2xl focus:ring-2 focus:ring-[#00628c]/40 transition-all font-bold text-[#1b1c1c]"
-                    value={formData.salary}
+                    placeholder={formData.salary === 'A combinar' ? 'A combinar' : 'Ex: R$ 2.500,00'} 
+                    className="w-full pl-12 pr-4 py-4 bg-[#f6f3f2] border-none rounded-2xl focus:ring-2 focus:ring-[#00628c]/40 transition-all font-bold text-[#1b1c1c] disabled:opacity-50"
+                    value={formData.salary === 'A combinar' ? '' : formData.salary}
+                    disabled={formData.salary === 'A combinar'}
                     onChange={e => setFormData({...formData, salary: maskCurrency(e.target.value)})}
                   />
                 </div>

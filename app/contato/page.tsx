@@ -89,7 +89,7 @@ export default function ContatoPage() {
                   </div>
                   <div>
                     <div className="text-xs font-black uppercase tracking-widest text-[#6f7881] mb-1">E-mail Direto</div>
-                    <div className="text-lg font-bold text-[#1b1c1c]">contato@correntedobem.com</div>
+                    <div className="text-lg font-bold text-[#1b1c1c]">robinho@correntedobembr.com.br</div>
                   </div>
                 </div>
                 
