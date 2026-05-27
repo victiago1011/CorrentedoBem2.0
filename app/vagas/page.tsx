@@ -284,9 +284,15 @@ function VagasContent() {
                           <Briefcase className="w-7 h-7" />
                         )}
                       </div>
-                      <span className="px-3 py-1 bg-[#bff444] text-[#141f00] text-[10px] font-black uppercase tracking-wider rounded-full">
-                        {job.type}
-                      </span>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="px-3 py-1 bg-[#bff444] text-[#141f00] text-[10px] font-black uppercase tracking-wider rounded-full">
+                          {job.type}
+                        </span>
+                        <span className="text-[10px] text-[#6f7881] font-bold bg-[#f6f3f2] px-2 py-1 rounded-full flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#00628c]" />
+                          {job.created_at ? new Date(job.created_at).toLocaleDateString('pt-BR') : 'Nova'}
+                        </span>
+                      </div>
                     </div>
                     <h3 className="text-xl font-bold text-[#1b1c1c] group-hover:text-[#00628c] transition-colors mb-1 font-headline">
                       {job.title}
@@ -295,9 +301,6 @@ function VagasContent() {
                     <div className="flex flex-wrap items-center gap-4 text-[#3e4850] text-xs mb-6">
                       <span className="flex items-center gap-1.5 bg-[#f6f3f2] px-3 py-1.5 rounded-full">
                         <MapPin className="w-3.5 h-3.5" /> {job.location}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-[#00628c] font-bold">
-                        <Clock className="w-3.5 h-3.5" /> Publicada recentemente
                       </span>
                     </div>
                     <button 
@@ -418,7 +421,7 @@ function VagasContent() {
                   </div>
                 </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-10">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                     <div className="p-4 bg-[#f6f3f2] rounded-2xl">
                       <p className="text-[10px] font-black uppercase tracking-widest text-[#6f7881] mb-1">Localização</p>
                       <p className="text-sm font-bold text-[#3e4850] flex items-center gap-1.5">
@@ -437,8 +440,14 @@ function VagasContent() {
                         <DollarSign className="w-3.5 h-3.5 text-[#00628c]" /> {selectedJob.salary || 'A combinar'}
                       </p>
                     </div>
+                    <div className="p-4 bg-[#c8e6ff]/30 rounded-2xl border border-[#00628c]/10">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#00628c] mb-1">Publicação</p>
+                      <p className="text-sm font-bold text-[#00628c] flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#00628c]" /> {selectedJob.created_at ? new Date(selectedJob.created_at).toLocaleDateString('pt-BR') : 'Recentemente'}
+                      </p>
+                    </div>
                     {selectedJob.site_url && (
-                      <div className="p-4 bg-[#c8e6ff]/30 rounded-2xl border border-[#00628c]/10 md:col-span-2">
+                      <div className="p-4 bg-[#c8e6ff]/30 rounded-2xl border border-[#00628c]/10 md:col-span-4">
                         <p className="text-[10px] font-black uppercase tracking-widest text-[#00628c] mb-1">Link da Vaga / Empresa</p>
                         <a 
                           href={ensureExternalLink(selectedJob.site_url)} 

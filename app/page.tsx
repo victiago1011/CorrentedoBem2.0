@@ -290,14 +290,17 @@ export default function LandingPage() {
                           <Briefcase className="w-8 h-8 text-[#00628c]" />
                         )}
                       </div>
-                      {idx === 0 && <span className="px-3 py-1 bg-[#bff444] text-[#141f00] text-xs font-bold rounded-full uppercase tracking-wider">Novo</span>}
+                      <span className="px-3 py-1 bg-[#bff444] text-[#141f00] text-xs font-bold rounded-full flex items-center gap-1 shadow-sm">
+                        <Clock className="w-3 h-3 text-[#141f00]" />
+                        {job.created_at ? new Date(job.created_at).toLocaleDateString('pt-BR') : 'Nova'}
+                      </span>
                     </div>
                     <h3 className="text-xl lg:text-2xl font-bold text-[#1b1c1c] mb-2 font-headline line-clamp-1">{job.title}</h3>
                     <p className="text-[#964900] font-bold text-sm mb-4">{job.company}</p>
                     <p className="text-[#3e4850] mb-6 leading-relaxed line-clamp-3 text-sm flex-grow">{stripHtml(job.description)}</p>
-                    <div className="flex items-center gap-4 text-xs text-[#3e4850] font-medium mb-8">
-                      <span className="flex items-center gap-1"><MapPin className="w-4 h-4 text-[#00628c]" /> {job.location}</span>
-                      {job.salary && <span className="flex items-center gap-1"><DollarSign className="w-4 h-4 text-[#00628c]" /> {job.salary}</span>}
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-[#3e4850] font-medium mb-8">
+                      <span className="flex items-center gap-1 bg-[#f6f3f2] px-2.5 py-1 rounded-full"><MapPin className="w-3.5 h-3.5 text-[#00628c]" /> {job.location}</span>
+                      {job.salary && <span className="flex items-center gap-1 bg-[#f6f3f2] px-2.5 py-1 rounded-full"><DollarSign className="w-3.5 h-3.5 text-[#00628c]" /> {job.salary}</span>}
                     </div>
                     <button 
                       onClick={() => setSelectedJob(job)}
@@ -355,7 +358,7 @@ export default function LandingPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-10">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                     <div className="p-4 bg-[#f6f3f2] rounded-2xl">
                       <p className="text-[10px] font-black uppercase tracking-widest text-[#6f7881] mb-1">Localização</p>
                       <p className="text-sm font-bold text-[#3e4850] flex items-center gap-1.5">
@@ -374,8 +377,14 @@ export default function LandingPage() {
                         <DollarSign className="w-3.5 h-3.5 text-[#00628c]" /> {selectedJob.salary || 'A combinar'}
                       </p>
                     </div>
+                    <div className="p-4 bg-[#c8e6ff]/30 rounded-2xl border border-[#00628c]/10">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#00628c] mb-1">Publicação</p>
+                      <p className="text-sm font-bold text-[#00628c] flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#00628c]" /> {selectedJob.created_at ? new Date(selectedJob.created_at).toLocaleDateString('pt-BR') : 'Recentemente'}
+                      </p>
+                    </div>
                     {selectedJob.site_url && (
-                      <div className="p-4 bg-[#c8e6ff]/30 rounded-2xl border border-[#00628c]/10 md:col-span-2">
+                      <div className="p-4 bg-[#c8e6ff]/30 rounded-2xl border border-[#00628c]/10 md:col-span-4">
                         <p className="text-[10px] font-black uppercase tracking-widest text-[#00628c] mb-1">Link da Vaga / Empresa</p>
                         <a 
                           href={ensureExternalLink(selectedJob.site_url)} 
