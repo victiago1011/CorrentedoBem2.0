@@ -82,6 +82,30 @@ const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: stri
   );
 };
 
+interface Attachment {
+  name: string;
+  url: string;
+}
+
+const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'Anexo'): Attachment[] => {
+  if (!urlOrJson) return [];
+  try {
+    const trimmed = urlOrJson.trim();
+    if (trimmed.startsWith('[')) {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item: any) => ({
+          name: item.name || defaultName,
+          url: item.url || item.data || ''
+        })).filter(item => item.url);
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return [{ name: defaultName, url: urlOrJson }];
+};
+
   // --- Types ---
 
 type View = 'noticias' | 'vagas' | 'curriculos' | 'negocios' | 'historico' | 'configuracoes' | 'galeria' | 'galeria_vagas' | 'galeria_negocios' | 'recusados' | 'contatos' | 'depoimentos';
@@ -2638,46 +2662,50 @@ export default function Dashboard() {
                     {expandedSections.attachments && (
                        <div className="p-5 pt-0 animate-in fade-in slide-in-from-top-2 duration-300">
                         {selectedJob.attachment_url ? (
-                          <div className="p-4 bg-surface-container rounded-2xl border border-outline-variant/10">
-                            {selectedJob.attachment_url.startsWith('data:image') ? (
-                              <div className="space-y-3">
-                                <div className="relative w-full aspect-video rounded-xl overflow-hidden shadow-inner bg-black/5">
-                                  <Image src={selectedJob.attachment_url} alt="Anexo" fill className="object-contain" referrerPolicy="no-referrer" />
-                                </div>
-                                <button 
-                                  onClick={() => {
-                                    const link = document.createElement('a');
-                                    link.href = selectedJob.attachment_url!;
-                                    link.download = `anexo-vaga-${selectedJob.id}`;
-                                    link.click();
-                                  }}
-                                  className="w-full py-2 bg-white text-primary text-[10px] font-bold uppercase tracking-wider rounded-xl border border-primary/20 hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
-                                >
-                                  <Upload className="w-3 h-3 rotate-180" />
-                                  Baixar Imagem
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className="p-2 bg-primary/10 rounded-lg">
-                                    <FileText className="w-5 h-5 text-primary" />
+                          <div className="space-y-3 w-full">
+                            {parseAttachments(selectedJob.attachment_url).map((attachment, idx) => (
+                              <div key={idx} className="p-4 bg-surface-container rounded-2xl border border-outline-variant/10">
+                                {attachment.url.startsWith('data:image') ? (
+                                  <div className="space-y-3">
+                                    <div className="relative w-full aspect-video rounded-xl overflow-hidden shadow-inner bg-black/5">
+                                      <Image src={attachment.url} alt={attachment.name} fill className="object-contain" referrerPolicy="no-referrer" />
+                                    </div>
+                                    <button 
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = attachment.url;
+                                        link.download = attachment.name;
+                                        link.click();
+                                      }}
+                                      className="w-full py-2 bg-white text-primary text-[10px] font-bold uppercase tracking-wider rounded-xl border border-primary/20 hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                      <Upload className="w-3 h-3 rotate-180" />
+                                      Baixar {attachment.name}
+                                    </button>
                                   </div>
-                                  <span className="text-xs font-bold truncate max-w-[120px]">Documento</span>
-                                </div>
-                                <button 
-                                  onClick={() => {
-                                    const link = document.createElement('a');
-                                    link.href = selectedJob.attachment_url!;
-                                    link.download = `documento-vaga-${selectedJob.id}`;
-                                    link.click();
-                                  }}
-                                  className="p-2 bg-primary text-on-primary rounded-lg shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
-                                >
-                                  <Upload className="w-3 h-3 rotate-180" />
-                                </button>
+                                ) : (
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="p-2 bg-primary/10 rounded-lg">
+                                        <FileText className="w-5 h-5 text-primary" />
+                                      </div>
+                                      <span className="text-xs font-bold truncate max-w-[200px]">{attachment.name}</span>
+                                    </div>
+                                    <button 
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = attachment.url;
+                                        link.download = attachment.name;
+                                        link.click();
+                                      }}
+                                      className="p-2 bg-primary text-on-primary rounded-lg shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+                                    >
+                                      <Upload className="w-3 h-3 rotate-180" />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            ))}
                           </div>
                         ) : (
                           <div className="text-center py-4 p-4 border border-dashed border-outline-variant/30 rounded-2xl">
@@ -2781,8 +2809,27 @@ export default function Dashboard() {
                           </div>
                        )}
                        {selectedCandidate.cv_url && (
+                          <div className="space-y-2 mt-4">
+                            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Currículo(s) Anexo(s)</p>
+                            {parseAttachments(selectedCandidate.cv_url).map((attachment, idx) => (
+                              <a 
+                                key={idx}
+                                href={attachment.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-between p-3 bg-primary/5 text-primary text-sm font-bold rounded-xl border border-primary/10 hover:bg-primary/10 transition-colors"
+                              >
+                                 <div className="flex items-center gap-2 truncate pr-2">
+                                   <FileText className="w-4 h-4 shrink-0" />
+                                   <span className="truncate">{attachment.name}</span>
+                                 </div>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        {false && (selectedCandidate as any)?.cv_url && (
                           <a 
-                            href={selectedCandidate.cv_url} 
+                            href={(selectedCandidate as any)?.cv_url} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 p-3 bg-primary/5 text-primary text-sm font-bold rounded-xl border border-primary/10 hover:bg-primary/10 transition-colors mt-4"
@@ -2960,17 +3007,63 @@ export default function Dashboard() {
                     {expandedSections.attachments && (
                        <div className="p-5 pt-0 animate-in fade-in slide-in-from-top-2 duration-300">
                         {selectedNegocio.attachment_url ? (
+                          <div className="space-y-3 w-full">
+                            {parseAttachments(selectedNegocio.attachment_url).map((attachment, idx) => (
+                              <div key={idx} className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
+                                {attachment.url.startsWith('data:image') ? (
+                                  <div className="space-y-3">
+                                    <div className="relative w-full aspect-video rounded-xl overflow-hidden shadow-inner bg-black/5">
+                                      <Image src={attachment.url} alt={attachment.name} fill className="object-contain" referrerPolicy="no-referrer" />
+                                    </div>
+                                    <button 
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = attachment.url;
+                                        link.download = attachment.name;
+                                        link.click();
+                                      }}
+                                      className="w-full py-2 bg-white text-orange-600 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-orange-200 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                      <Upload className="w-3 h-3 rotate-180" />
+                                      Baixar {attachment.name}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
+                                        <FileText className="w-5 h-5" />
+                                      </div>
+                                      <span className="text-xs font-bold truncate max-w-[200px]">{attachment.name}</span>
+                                    </div>
+                                    <button 
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = attachment.url;
+                                        link.download = attachment.name;
+                                        link.click();
+                                      }}
+                                      className="p-2 bg-orange-600 text-white rounded-lg shadow-lg shadow-orange-600/20 hover:scale-105 transition-transform"
+                                    >
+                                      <Upload className="w-3 h-3 rotate-180" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : false && (selectedNegocio as any)?.attachment_url ? (
                           <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
-                            {selectedNegocio.attachment_url.startsWith('data:image') ? (
+                            {(selectedNegocio as any)?.attachment_url?.startsWith('data:image') ? (
                               <div className="space-y-3">
                                 <div className="relative w-full aspect-video rounded-xl overflow-hidden shadow-inner bg-black/5">
-                                  <Image src={selectedNegocio.attachment_url} alt="Anexo" fill className="object-contain" referrerPolicy="no-referrer" />
+                                  <Image src={(selectedNegocio as any)?.attachment_url} alt="Anexo" fill className="object-contain" referrerPolicy="no-referrer" />
                                 </div>
                                 <button 
                                   onClick={() => {
                                     const link = document.createElement('a');
-                                    link.href = selectedNegocio.attachment_url!;
-                                    link.download = `anexo-negocio-${selectedNegocio.id}`;
+                                    link.href = (selectedNegocio as any)?.attachment_url!;
+                                    link.download = `anexo-negocio-${(selectedNegocio as any)?.id}`;
                                     link.click();
                                   }}
                                   className="w-full py-2 bg-white text-orange-600 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-orange-200 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2"
@@ -2990,8 +3083,8 @@ export default function Dashboard() {
                                 <button 
                                   onClick={() => {
                                     const link = document.createElement('a');
-                                    link.href = selectedNegocio.attachment_url!;
-                                    link.download = `documento-negocio-${selectedNegocio.id}`;
+                                    link.href = (selectedNegocio as any)?.attachment_url!;
+                                    link.download = `documento-negocio-${(selectedNegocio as any)?.id}`;
                                     link.click();
                                   }}
                                   className="p-2 bg-orange-600 text-white rounded-lg shadow-lg shadow-orange-600/20 hover:scale-105 transition-transform"

@@ -35,6 +35,11 @@ export default function CadastrarNegocioPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [errorModal, setErrorModal] = useState<{ isOpen: boolean; title: string; message: string }>({
+    isOpen: false,
+    title: '',
+    message: ''
+  });
   const [formData, setFormData] = useState({
     title: '',
     owner_name: '',
@@ -50,6 +55,7 @@ export default function CadastrarNegocioPage() {
     logo_url: ''
   });
   const [attachmentName, setAttachmentName] = useState('');
+  const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const attachmentInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -83,16 +89,68 @@ export default function CadastrarNegocioPage() {
     }
   };
 
-  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setAttachmentName(file.name);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, attachment_url: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+  const handleAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newAttachmentsList = [...attachments];
+      
+      // Calcular o tamanho total dos arquivos já adicionados
+      let currentTotalSize = attachments.reduce((acc, a) => {
+        const base64Str = a.url.split(',')[1] || '';
+        return acc + (base64Str.length * 0.75);
+      }, 0);
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 3 * 1024 * 1024) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo Grande Demais',
+            message: `O arquivo "${file.name}" excede o limite individual de 3MB. Por favor, envie arquivos menores.`
+          });
+          continue;
+        }
+
+        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Limite Combinado Excedido',
+            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB, para garantir que os arquivos sejam gravados de forma estável no banco de dados.`
+          });
+          break;
+        }
+
+        const fileDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        newAttachmentsList.push({
+          name: file.name,
+          url: fileDataUrl
+        });
+
+        currentTotalSize += file.size;
+      }
+
+      setAttachments(newAttachmentsList);
+      setFormData(prev => ({ ...prev, attachment_url: JSON.stringify(newAttachmentsList) }));
+
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = '';
+      }
     }
+  };
+
+  const removeAttachment = (indexToRemove: number) => {
+    const updated = attachments.filter((_, idx) => idx !== indexToRemove);
+    setAttachments(updated);
+    setFormData(prev => ({
+      ...prev,
+      attachment_url: updated.length > 0 ? JSON.stringify(updated) : ''
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -414,7 +472,7 @@ export default function CadastrarNegocioPage() {
             `}</style>
 
             <div className="space-y-4">
-              <label className="text-xs font-black uppercase tracking-widest text-[#3e4850] ml-1">Anexo / Arquivo (Opcional)</label>
+              <label className="text-xs font-black uppercase tracking-widest text-[#3e4850] ml-1">Anexos / Arquivos (Opcional) - Envie um ou mais arquivos</label>
               <div 
                 onClick={() => attachmentInputRef.current?.click()}
                 className="w-full border-2 border-dashed border-[#bec8d1] rounded-2xl p-8 flex flex-col items-center justify-center gap-4 bg-[#f6f3f2]/30 hover:bg-[#00628c]/5 hover:border-[#00628c] transition-all cursor-pointer group"
@@ -423,19 +481,50 @@ export default function CadastrarNegocioPage() {
                   <Upload className="w-6 h-6 text-[#00628c]" />
                 </div>
                 <div className="text-center">
-                  <p className="font-bold text-[#3e4850] truncate max-w-xs md:max-w-md">
-                    {attachmentName || 'Clique para anexar um documento ou imagem'}
+                  <p className="font-bold text-[#3e4850]">
+                    Clique para anexar um ou mais documentos ou imagens
                   </p>
-                  <p className="text-xs text-[#6f7881] mt-1">Formatos aceitos: PDF, DOCX, Imagens (Máx. 5MB)</p>
+                  <p className="text-xs text-[#6f7881] mt-1">Formatos aceitos: PDF, DOCX, Imagens</p>
+                  <p className="text-[10px] text-amber-600 font-bold mt-1.5 bg-amber-50 px-2 py-1 rounded">Limite: Até 3MB por arquivo / Máximo de 5MB somando todos os anexos</p>
                 </div>
                 <input 
                   type="file"
+                  multiple
                   ref={attachmentInputRef}
                   className="hidden"
                   accept=".pdf,.doc,.docx,image/*"
                   onChange={handleAttachmentChange}
                 />
               </div>
+
+              {attachments.length > 0 && (
+                <div className="space-y-2 mt-4">
+                  <p className="text-xs font-bold text-[#3e4850] uppercase tracking-wider ml-1">Arquivos Anexados ({attachments.length})</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {attachments.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-4 bg-white border border-[#bec8d1]/30 rounded-2xl shadow-sm">
+                        <div className="flex items-center gap-3 truncate pr-4">
+                          <div className="p-2 bg-[#00628c]/10 text-[#00628c] rounded-xl shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <span className="text-sm font-bold text-[#3e4850] truncate">{file.name}</span>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeAttachment(idx);
+                          }}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0"
+                          title="Remover anexo"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <button 
@@ -455,7 +544,7 @@ export default function CadastrarNegocioPage() {
         </div>
       </div>
 
-      {/* Confirmation Modal */}
+      {/* Confirmation and Error Modals */}
       <AnimatePresence>
         {showConfirmModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
@@ -486,6 +575,34 @@ export default function CadastrarNegocioPage() {
                   Sim, Publicar
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+
+        {errorModal.isOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-md w-full shadow-2xl border border-red-100 text-center relative overflow-hidden"
+            >
+              {/* Top accent bar */}
+              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-500 to-red-500" />
+              
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <X className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-black text-[#1a2b3b] mb-3">{errorModal.title}</h3>
+              <p className="text-[#6f7881] text-sm mb-8 leading-relaxed">
+                {errorModal.message}
+              </p>
+              <button 
+                onClick={() => setErrorModal(prev => ({ ...prev, isOpen: false }))}
+                className="w-full py-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-red-500/20"
+              >
+                Entendi e vou corrigir
+              </button>
             </motion.div>
           </div>
         )}

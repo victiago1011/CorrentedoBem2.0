@@ -37,6 +37,30 @@ import Image from 'next/image';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
 
+interface Attachment {
+  name: string;
+  url: string;
+}
+
+const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'Anexo'): Attachment[] => {
+  if (!urlOrJson) return [];
+  try {
+    const trimmed = urlOrJson.trim();
+    if (trimmed.startsWith('[')) {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item: any) => ({
+          name: item.name || defaultName,
+          url: item.url || item.data || ''
+        })).filter(item => item.url);
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return [{ name: defaultName, url: urlOrJson }];
+};
+
 interface Job {
   id: string;
   title: string;
@@ -488,22 +512,29 @@ function VagasContent() {
 
                   {selectedJob.attachment_url && (
                     <div className="pt-6 border-t border-[#f6f3f2]">
-                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#00628c] mb-4">Anexo / Arquivo</h3>
-                      <a 
-                        href={selectedJob.attachment_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        download
-                        className="flex items-center gap-3 p-4 bg-[#f6f3f2] rounded-2xl hover:bg-[#c8e6ff]/20 transition-all border border-transparent hover:border-[#00628c]/10"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-[#c8e6ff] flex items-center justify-center text-[#00628c]">
-                          <Paperclip className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-black text-[#00628c] uppercase tracking-wider">Clique para saber mais</p>
-                          <p className="text-[10px] text-[#6f7881]">Clique para baixar o link do anexo</p>
-                        </div>
-                      </a>
+                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#00628c] mb-4">Anexo(s) / Arquivo(s)</h3>
+                      <div className="space-y-3">
+                        {parseAttachments(selectedJob.attachment_url).map((attachment, index) => (
+                          <a 
+                            key={index}
+                            href={attachment.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            download={attachment.name}
+                            className="flex items-center gap-3 p-4 bg-[#f6f3f2] rounded-2xl hover:bg-[#c8e6ff]/20 transition-all border border-transparent hover:border-[#00628c]/10"
+                          >
+                            <div className="w-10 h-10 rounded-xl bg-[#c8e6ff] flex items-center justify-center text-[#00628c]">
+                              <Paperclip className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-black text-[#00628c] uppercase tracking-wider truncate" title={attachment.name}>
+                                {attachment.name}
+                              </p>
+                              <p className="text-[10px] text-[#6f7881]">Clique para baixar o arquivo anexado</p>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
                     </div>
                   )}
 
