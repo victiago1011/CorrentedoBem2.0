@@ -46,7 +46,11 @@ import {
   Maximize2,
   Minimize2,
   User,
-  LogOut
+  LogOut,
+  Plus,
+  Building2,
+  Users,
+  Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, maskCurrency, maskPhone, ensureExternalLink, stripHtml } from '@/lib/utils';
@@ -108,7 +112,7 @@ const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'A
 
   // --- Types ---
 
-type View = 'noticias' | 'vagas' | 'curriculos' | 'negocios' | 'historico' | 'configuracoes' | 'galeria' | 'galeria_vagas' | 'galeria_negocios' | 'recusados' | 'contatos' | 'depoimentos';
+type View = 'noticias' | 'vagas' | 'curriculos' | 'negocios' | 'historico' | 'configuracoes' | 'galeria' | 'galeria_vagas' | 'galeria_negocios' | 'recusados' | 'contatos' | 'depoimentos' | 'pendentes';
 
 interface Testimonial {
   id: string | number;
@@ -318,7 +322,7 @@ const MOCK_CANDIDATES: Candidate[] = [
 
 // --- Components ---
 
-const Sidebar = ({ activeView, setView, isOpen, onClose }: { activeView: View, setView: (v: View) => void, isOpen: boolean, onClose: () => void }) => {
+const Sidebar = ({ activeView, setView, isOpen, onClose, totalPendingCount = 0 }: { activeView: View, setView: (v: View) => void, isOpen: boolean, onClose: () => void, totalPendingCount?: number }) => {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -362,11 +366,8 @@ const Sidebar = ({ activeView, setView, isOpen, onClose }: { activeView: View, s
 
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
           {[
-            { id: 'vagas', label: 'Vagas Pendentes', icon: <Clock className="w-5 h-5" /> },
+            { id: 'pendentes', label: 'Pendentes', icon: <Clock className="w-5 h-5" />, badge: totalPendingCount },
             { id: 'noticias', label: 'Notícias', icon: <Megaphone className="w-5 h-5" /> },
-            { id: 'curriculos', label: 'Currículos Pendentes', icon: <FileText className="w-5 h-5" /> },
-            { id: 'negocios', label: 'Negócios Pendentes', icon: <TrendingUp className="w-5 h-5" /> },
-            { id: 'depoimentos', label: 'Depoimentos Pendentes', icon: <Quote className="w-5 h-5" /> },
             { id: 'galeria_vagas', label: 'Galeria de Vagas', icon: <Briefcase className="w-5 h-5" /> },
             { id: 'galeria', label: 'Galeria de Talentos', icon: <LayoutGrid className="w-5 h-5" /> },
             { id: 'galeria_negocios', label: 'Galeria de Negócios', icon: <Zap className="w-5 h-5" /> },
@@ -382,16 +383,23 @@ const Sidebar = ({ activeView, setView, isOpen, onClose }: { activeView: View, s
                 if (window.innerWidth < 1024) onClose();
               }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+                "w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group",
                 activeView === item.id 
                   ? "bg-primary/5 text-primary font-bold border-r-4 border-primary" 
                   : "text-on-surface-variant hover:bg-surface-container-low"
               )}
             >
-              <span className={cn("transition-transform group-hover:scale-110", activeView === item.id && "text-primary")}>
-                {item.icon}
-              </span>
-              <span className="text-sm">{item.label}</span>
+              <div className="flex items-center gap-3">
+                <span className={cn("transition-transform group-hover:scale-110", activeView === item.id && "text-primary")}>
+                  {item.icon}
+                </span>
+                <span className="text-sm">{item.label}</span>
+              </div>
+              {item.badge !== undefined && item.badge > 0 && (
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-[#bff444] text-[#141f00] rounded-full">
+                  {item.badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -413,7 +421,7 @@ const Sidebar = ({ activeView, setView, isOpen, onClose }: { activeView: View, s
   );
 };
 
-const Header = ({ onMenuOpen }: { onMenuOpen: () => void }) => {
+const Header = ({ onMenuOpen, onCadastrarClick }: { onMenuOpen: () => void; onCadastrarClick: () => void }) => {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -440,6 +448,14 @@ const Header = ({ onMenuOpen }: { onMenuOpen: () => void }) => {
         </div>
       </div>
       <div className="flex items-center gap-2 lg:gap-6">
+        <button 
+          onClick={onCadastrarClick}
+          className="px-4 py-2 lg:px-5 lg:py-2.5 bg-[#00628c] hover:bg-[#004e70] text-white font-bold rounded-full shadow-lg shadow-[#00628c]/20 hover:scale-[1.03] active:scale-95 transition-all text-xs lg:text-sm flex items-center gap-1.5 cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Cadastrar</span>
+        </button>
+        <div className="hidden sm:block h-6 w-[1px] bg-outline-variant/20"></div>
         <button className="relative p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container-low">
           <Bell className="w-5 h-5" />
           <span className="absolute top-2 right-2 w-2 h-2 bg-secondary rounded-full border-2 border-white"></span>
@@ -463,7 +479,8 @@ const Header = ({ onMenuOpen }: { onMenuOpen: () => void }) => {
 
 export default function Dashboard() {
   const router = useRouter();
-  const [activeView, setView] = useState<View>('vagas');
+  const [activeView, setView] = useState<View>('pendentes');
+  const [activePendingSubTab, setActivePendingSubTab] = useState<'vagas' | 'curriculos' | 'negocios' | 'depoimentos'>('vagas');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -483,6 +500,57 @@ export default function Dashboard() {
   const [isAddingJob, setIsAddingJob] = useState(false);
   const [isAddingNegocio, setIsAddingNegocio] = useState(false);
   const [isAddingNoticia, setIsAddingNoticia] = useState(false);
+  const [isAddingCandidate, setIsAddingCandidate] = useState(false);
+  const [isRegisterChooserOpen, setIsRegisterChooserOpen] = useState(false);
+
+  const registerOptions = [
+    { 
+      title: 'Vaga', 
+      desc: 'Anuncie uma oportunidade de emprego', 
+      icon: <Briefcase className="w-8 h-8" />, 
+      action: () => {
+        setIsRegisterChooserOpen(false);
+        setIsAddingJob(true);
+      },
+      color: 'bg-blue-50 text-[#00628c]'
+    },
+    { 
+      title: 'Currículo', 
+      desc: 'Cadastre seu talento na nossa rede', 
+      icon: <FileText className="w-8 h-8" />, 
+      action: () => {
+        setIsRegisterChooserOpen(false);
+        setIsAddingCandidate(true);
+      },
+      color: 'bg-green-50 text-green-600'
+    },
+    { 
+      title: 'Negócio', 
+      desc: 'Divulgue uma oportunidade de negócio', 
+      icon: <TrendingUp className="w-8 h-8" />, 
+      action: () => {
+        setIsRegisterChooserOpen(false);
+        setIsAddingNegocio(true);
+      },
+      color: 'bg-orange-50 text-orange-600'
+    }
+  ];
+
+  // Candidate/Talento registration states
+  const [candImage, setCandImage] = useState('https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y');
+  const [candSkills, setCandSkills] = useState<string[]>([]);
+  const [candSkillInput, setCandSkillInput] = useState('');
+  const [candResumes, setCandResumes] = useState<{ name: string; url: string }[]>([]);
+  const [candSummary, setCandSummary] = useState('');
+  const candImageInputRef = React.useRef<HTMLInputElement>(null);
+  const candResumeInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Business/Negocio registration states
+  const [negLogoUrl, setNegLogoUrl] = useState('');
+  const [negDescription, setNegDescription] = useState('');
+  const [negAttachments, setNegAttachments] = useState<{ name: string; url: string }[]>([]);
+  const negLogoInputRef = React.useRef<HTMLInputElement>(null);
+  const negAttachmentInputRef = React.useRef<HTMLInputElement>(null);
   const [newsContent, setNewsContent] = useState('');
   const [newsImageUrl, setNewsImageUrl] = useState('');
   const [isEditorExpanded, setIsEditorExpanded] = useState(false);
@@ -517,6 +585,14 @@ export default function Dashboard() {
     auto_notifications: true
   });
 
+  const [errorModal, setErrorModal] = useState<{ isOpen: boolean; title: string; message: string }>({
+    isOpen: false,
+    title: '',
+    message: ''
+  });
+  const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
+  const attachmentInputRef = React.useRef<HTMLInputElement>(null);
+
   const [confirmAction, setConfirmAction] = useState<{
     type: 'approve' | 'reject' | 'delete' | 'edit';
     target: 'job' | 'candidate' | 'negocio' | 'noticia';
@@ -539,6 +615,63 @@ export default function Dashboard() {
     }
   };
 
+  const handleAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newAttachmentsList = [...attachments];
+      
+      let currentTotalSize = attachments.reduce((acc, a) => {
+        const base64Str = a.url.split(',')[1] || '';
+        return acc + (base64Str.length * 0.75);
+      }, 0);
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 3 * 1024 * 1024) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo Grande Demais',
+            message: `O arquivo "${file.name}" excede o limite individual de 3MB. Por favor, envie arquivos menores.`
+          });
+          continue;
+        }
+
+        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Limite Combinado Excedido',
+            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB, para garantir que os arquivos sejam gravados de forma estável no banco de dados.`
+          });
+          break;
+        }
+
+        const fileDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        newAttachmentsList.push({
+          name: file.name,
+          url: fileDataUrl
+        });
+
+        currentTotalSize += file.size;
+      }
+
+      setAttachments(newAttachmentsList);
+
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeAttachment = (indexToRemove: number) => {
+    setAttachments(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
   const quillModules = {
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
@@ -553,7 +686,7 @@ export default function Dashboard() {
     'header',
     'bold', 'italic', 'underline', 'strike',
     'color', 'background',
-    'list', 'bullet',
+    'list',
     'link'
   ];
 
@@ -586,6 +719,58 @@ export default function Dashboard() {
   const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
     setShowToast({ message, type });
     setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const renderPendingTabs = () => {
+    return (
+      <div className="space-y-6">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline-variant/10 pb-6">
+          <div>
+            <h1 className="text-3xl font-black text-[#1a2b3b] tracking-tight font-headline flex items-center gap-3">
+              <Clock className="w-8 h-8 text-primary" /> Fila de Aprovações
+            </h1>
+            <p className="text-[#6f7881] mt-1 text-sm bg-surface-container-low px-1.5 py-0.5 rounded-md inline-block text-left">
+              Analise, aprove ou recuse as novas postagens enviadas pela comunidade.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-4 py-2 bg-primary/10 text-primary font-bold rounded-full text-xs flex items-center gap-1.5 shadow-sm">
+              <Zap className="w-4 h-4 text-emerald-500 fill-current animate-pulse" />
+              {totalPendingCount} Pendentes
+            </span>
+          </div>
+        </header>
+
+        {/* Pill Selector */}
+        <div className="flex flex-wrap gap-2 bg-surface-container-low p-1.5 rounded-3xl border border-outline-variant/10 max-w-fit shadow-inner">
+          {[
+            { key: 'vagas', label: 'Vagas', count: jobsPendingCount },
+            { key: 'curriculos', label: 'Currículos', count: candidatesPendingCount },
+            { key: 'negocios', label: 'Negócios', count: negociosPendingCount },
+            { key: 'depoimentos', label: 'Depoimentos', count: testimonialsPendingCount }
+          ].map((subTab) => (
+            <button
+              key={subTab.key}
+              type="button"
+              onClick={() => setActivePendingSubTab(subTab.key as any)}
+              className={cn(
+                "flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer select-none",
+                activePendingSubTab === subTab.key
+                  ? "bg-white text-primary shadow-sm border border-outline-variant/10"
+                  : "text-on-surface-variant hover:text-primary hover:bg-white/40"
+              )}
+            >
+              <span>{subTab.label}</span>
+              {subTab.count > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-primary text-[#bff444]">
+                  {subTab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   // Fetch Data
@@ -864,6 +1049,7 @@ export default function Dashboard() {
       site_url: newJob.site_url || '',
       description: newJob.description || '',
       requirements: newJob.requirements || [],
+      attachment_url: newJob.attachment_url || '',
     };
 
     const { data, error } = await supabase
@@ -876,6 +1062,7 @@ export default function Dashboard() {
       setJobs(prev => [data, ...prev]);
       setIsAddingJob(false);
       setNewJobSalaryNegotiable(false);
+      setAttachments([]);
       
       const historyEntry = {
         action: 'Vaga Criada',
@@ -883,8 +1070,274 @@ export default function Dashboard() {
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
+    } else if (error) {
+      triggerToast(`Erro ao salvar vaga: ${error.message}`, 'error');
     }
   }, []);
+
+  // Candidate Registration Handlers
+  const handleCandImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 3 * 1024 * 1024) {
+        setErrorModal({
+          isOpen: true,
+          title: 'Arquivo Grande Demais',
+          message: 'O arquivo excede o limite individual de 3MB.'
+        });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCandImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const addCandSkill = () => {
+    if (candSkillInput.trim()) {
+      if (!candSkills.includes(candSkillInput.trim())) {
+        setCandSkills(prev => [...prev, candSkillInput.trim()]);
+      }
+      setCandSkillInput('');
+    }
+  };
+
+  const removeCandSkill = (index: number) => {
+    setCandSkills(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleCandResumeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newList = [...candResumes];
+      let currentTotalSize = candResumes.reduce((acc, a) => {
+        const base64Str = a.url.split(',')[1] || '';
+        return acc + (base64Str.length * 0.75);
+      }, 0);
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 3 * 1024 * 1024) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo Grande Demais',
+            message: `O arquivo "${file.name}" excede o limite individual de 3MB.`
+          });
+          continue;
+        }
+        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Limite Combinado Excedido',
+            message: `O limite combinado de 5MB foi excedido.`
+          });
+          break;
+        }
+
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        newList.push({ name: file.name, url: dataUrl });
+        currentTotalSize += file.size;
+      }
+      setCandResumes(newList);
+      if (candResumeInputRef.current) candResumeInputRef.current.value = '';
+    }
+  };
+
+  const removeCandResume = (index: number) => {
+    setCandResumes(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const submitCandidate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(formEl);
+    
+    const email = formData.get('email') as string;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      triggerToast('Por favor, insira um e-mail válido.', 'error');
+      return;
+    }
+
+    const candData = {
+      name: formData.get('name') as string,
+      email: email,
+      phone: formData.get('phone') as string,
+      location: formData.get('location') as string || '',
+      role: formData.get('role') as string || '',
+      area: formData.get('area') as string,
+      summary: candSummary,
+      skills: candSkills,
+      image: candImage,
+      cv_url: candResumes.length > 0 ? JSON.stringify(candResumes) : '',
+      status: 'active'
+    };
+
+    const { data, error } = await supabase
+      .from('talentos')
+      .insert([candData])
+      .select()
+      .single();
+
+    if (data && !error) {
+      setCandidates(prev => [data, ...prev]);
+      setIsAddingCandidate(false);
+      triggerToast('Currículo cadastrado com sucesso!', 'success');
+      
+      // Reset form states
+      setCandImage('https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y');
+      setCandSkills([]);
+      setCandResumes([]);
+      setCandSummary('');
+      
+      const historyEntry = {
+        action: 'Currículo Criado',
+        details: `Currículo de "${data.name}" foi criado manualmente pelo Administrador.`
+      };
+      await supabase.from('history').insert(historyEntry);
+      
+      // reload history
+      const { data: hData } = await supabase.from('history').select('*').order('created_at', { ascending: false }).limit(20);
+      if (hData) setHistory(hData);
+    } else if (error) {
+      triggerToast(`Erro ao cadastrar currículo: ${error.message}`, 'error');
+    }
+  };
+
+  // Business Registration Handlers
+  const handleNegLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 3 * 1024 * 1024) {
+        setErrorModal({
+          isOpen: true,
+          title: 'Arquivo Grande Demais',
+          message: 'O arquivo excede o limite individual de 3MB.'
+        });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNegLogoUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleNegAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newList = [...negAttachments];
+      let currentTotalSize = negAttachments.reduce((acc, a) => {
+        const base64Str = a.url.split(',')[1] || '';
+        return acc + (base64Str.length * 0.75);
+      }, 0);
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 3 * 1024 * 1024) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo Grande Demais',
+            message: `O arquivo "${file.name}" excede o limite individual de 3MB.`
+          });
+          continue;
+        }
+        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Limite Combinado Excedido',
+            message: `O limite combinado de 5MB foi excedido.`
+          });
+          break;
+        }
+
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        newList.push({ name: file.name, url: dataUrl });
+        currentTotalSize += file.size;
+      }
+      setNegAttachments(newList);
+      if (negAttachmentInputRef.current) negAttachmentInputRef.current.value = '';
+    }
+  };
+
+  const removeNegAttachment = (index: number) => {
+    setNegAttachments(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const submitNegocio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(formEl);
+
+    const email = formData.get('contact_email') as string;
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        triggerToast('Por favor, insira um e-mail de contato válido.', 'error');
+        return;
+      }
+    }
+
+    const negoData = {
+      title: formData.get('title') as string,
+      owner_name: formData.get('owner_name') as string,
+      contact_name: formData.get('contact_name') as string,
+      contact_email: email || null,
+      contact_phone: formData.get('contact_phone') as string || null,
+      location: formData.get('location') as string || null,
+      link: formData.get('link') as string || null,
+      type: formData.get('type') as string || null,
+      area: formData.get('area') as string || null,
+      description: negDescription || null,
+      attachment_url: negAttachments.length > 0 ? JSON.stringify(negAttachments) : null,
+      logo_url: negLogoUrl || null,
+      status: 'active'
+    };
+
+    const { data, error } = await supabase
+      .from('negocios')
+      .insert([negoData])
+      .select()
+      .single();
+
+    if (data && !error) {
+      setNegocios(prev => [data, ...prev]);
+      setIsAddingNegocio(false);
+      triggerToast('Negócio cadastrado com sucesso!', 'success');
+      
+      // Reset form states
+      setNegLogoUrl('');
+      setNegAttachments([]);
+      setNegDescription('');
+      
+      const historyEntry = {
+        action: 'Negócio Criado',
+        details: `Negócio "${data.title}" foi criado manualmente pelo Administrador.`
+      };
+      await supabase.from('history').insert(historyEntry);
+      
+      // reload history
+      const { data: hData } = await supabase.from('history').select('*').order('created_at', { ascending: false }).limit(20);
+      if (hData) setHistory(hData);
+    } else if (error) {
+      triggerToast(`Erro ao cadastrar negócio: ${error.message}`, 'error');
+    }
+  };
 
   const updateJob = React.useCallback(async (updatedJob: Job) => {
     const { data, error } = await supabase
@@ -1209,12 +1662,18 @@ export default function Dashboard() {
     );
   }
 
+  const jobsPendingCount = jobs.filter(j => j.status === 'pending').length;
+  const candidatesPendingCount = candidates.filter(c => c.status === 'pending').length;
+  const negociosPendingCount = negocios.filter(n => n.status === 'pending').length;
+  const testimonialsPendingCount = testimonials.filter(t => t.status === 'pending').length;
+  const totalPendingCount = jobsPendingCount + candidatesPendingCount + negociosPendingCount + testimonialsPendingCount;
+
   return (
     <div className="min-h-screen flex">
-      <Sidebar activeView={activeView} setView={setView} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar activeView={activeView} setView={setView} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} totalPendingCount={totalPendingCount} />
       
       <main className="lg:ml-64 pt-16 flex-1 flex flex-col w-full">
-        <Header onMenuOpen={() => setIsSidebarOpen(true)} />
+        <Header onMenuOpen={() => setIsSidebarOpen(true)} onCadastrarClick={() => setIsRegisterChooserOpen(true)} />
         
         <div className="flex-1 flex overflow-hidden">
           {/* Content Area */}
@@ -1227,24 +1686,13 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            {activeView === 'vagas' && (
+            {activeView === 'pendentes' && activePendingSubTab === 'vagas' && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-8"
               >
-                <header className="flex justify-between items-end">
-                  <div>
-                    <h1 className="text-3xl font-extrabold text-primary tracking-tight font-headline">Vagas Pendentes</h1>
-                    <p className="text-on-surface-variant mt-1">Gerencie e analise as solicitações de novas vagas na plataforma.</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="px-4 py-2 bg-tertiary-fixed text-on-tertiary-fixed font-bold rounded-full text-xs flex items-center gap-2 shadow-sm">
-                      <Zap className="w-4 h-4 fill-current" />
-                      {jobs.filter(j => j.status === 'pending').length} Pendentes Hoje
-                    </span>
-                  </div>
-                </header>
+                {renderPendingTabs()}
 
                 <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-outline-variant/10 overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[600px]">
@@ -1303,12 +1751,18 @@ export default function Dashboard() {
                             {job.date || 'Hoje'} • {job.time || 'Agora'}
                           </td>
                           <td className="px-6 py-5 text-right">
-                            <button className={cn(
-                              "px-4 py-2 text-xs font-bold rounded-xl transition-all active:scale-95",
-                              selectedJob?.id === job.id 
-                                ? "bg-primary text-on-primary shadow-lg shadow-primary/20" 
-                                : "bg-surface-container-high text-on-surface hover:bg-primary/10 hover:text-primary"
-                            )}>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedJob(job);
+                              }}
+                              className={cn(
+                                "px-4 py-2 text-xs font-bold rounded-xl transition-all active:scale-95",
+                                selectedJob?.id === job.id 
+                                  ? "bg-primary text-on-primary shadow-lg shadow-primary/20" 
+                                  : "bg-surface-container-high text-on-surface hover:bg-primary/10 hover:text-primary"
+                              )}
+                            >
                               Analisar
                             </button>
                           </td>
@@ -1428,30 +1882,13 @@ export default function Dashboard() {
               </motion.div>
             )}
 
-            {activeView === 'curriculos' && (
+            {activeView === 'pendentes' && activePendingSubTab === 'curriculos' && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-8"
               >
-                <header className="flex justify-between items-end">
-                  <div>
-                    <span className="text-secondary font-bold text-sm tracking-widest uppercase mb-2 block">Central de Talentos</span>
-                    <h1 className="text-4xl font-extrabold text-on-surface tracking-tight font-headline">
-                      Currículos <span className="text-primary italic">Pendentes</span>
-                    </h1>
-                    <p className="text-on-surface-variant mt-2 max-w-xl">Analise e aprove novos candidatos para a rede. Cada currículo é uma oportunidade de transformar uma carreira.</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-tertiary-fixed flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-tertiary-fixed/20 flex items-center justify-center text-tertiary">
-                      <Search className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-on-surface leading-tight">{candidates.filter(c => c.status === 'pending').length}</p>
-                      <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Aguardando Revisão</p>
-                    </div>
-                  </div>
-                </header>
+                {renderPendingTabs()}
 
                 <div className="bg-white rounded-2xl p-2 shadow-sm border border-outline-variant/10 overflow-x-auto">
                   <table className="w-full text-left border-separate border-spacing-y-2 px-2 min-w-[600px]">
@@ -1509,30 +1946,13 @@ export default function Dashboard() {
               </motion.div>
             )}
 
-            {activeView === 'negocios' && (
+            {activeView === 'pendentes' && activePendingSubTab === 'negocios' && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-8"
               >
-                <header className="flex justify-between items-end">
-                  <div>
-                    <span className="text-orange-600 font-bold text-sm tracking-widest uppercase mb-2 block">Central de Negócios</span>
-                    <h1 className="text-4xl font-extrabold text-on-surface tracking-tight font-headline">
-                      Negócios <span className="text-orange-600 italic">Pendentes</span>
-                    </h1>
-                    <p className="text-on-surface-variant mt-2 max-w-xl">Gerencie propostas de parcerias e investimentos. Analise cada oportunidade com critério.</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-orange-200 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-600">
-                      <Zap className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-on-surface leading-tight">{negocios.filter(n => n.status === 'pending').length}</p>
-                      <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Aguardando Revisão</p>
-                    </div>
-                  </div>
-                </header>
+                {renderPendingTabs()}
 
                 <div className="bg-white rounded-2xl p-2 shadow-sm border border-outline-variant/10 overflow-x-auto">
                   <table className="w-full text-left border-separate border-spacing-y-2 px-2 min-w-[600px]">
@@ -1599,23 +2019,13 @@ export default function Dashboard() {
               </motion.div>
             )}
 
-            {activeView === 'depoimentos' && (
+            {activeView === 'pendentes' && activePendingSubTab === 'depoimentos' && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-8"
               >
-                <header className="flex justify-between items-end">
-                  <div>
-                    <h1 className="text-3xl font-extrabold text-primary tracking-tight font-headline">Depoimentos Pendentes</h1>
-                    <p className="text-on-surface-variant mt-1">Gerencie os depoimentos enviados pela comunidade para o site.</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="px-4 py-2 bg-primary/10 text-primary font-bold rounded-full text-xs flex items-center gap-2">
-                       {testimonials.filter(t => t.status === 'pending').length} Pendentes
-                    </span>
-                  </div>
-                </header>
+                {renderPendingTabs()}
 
                 <div className="grid grid-cols-1 gap-6">
                   {testimonials.filter(t => t.status === 'pending').map((t) => (
@@ -2366,6 +2776,434 @@ export default function Dashboard() {
             )}
           </div>
 
+          {isRegisterChooserOpen && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                onClick={() => setIsRegisterChooserOpen(false)}
+                className="absolute inset-0 bg-[#3e4850]/60 backdrop-blur-sm shadow-inner"
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden p-6 md:p-12 z-10"
+              >
+                <button 
+                  onClick={() => setIsRegisterChooserOpen(false)}
+                  className="absolute top-4 right-4 md:top-6 md:right-6 p-2 bg-[#f6f3f2] rounded-full text-[#3e4850] hover:bg-[#00628c] hover:text-white transition-all z-10 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="text-center mb-6 md:mb-10">
+                  <h2 className="text-xl md:text-3xl font-black text-[#00628c] font-headline mb-2 md:mb-4">O que você gostaria de cadastrar?</h2>
+                  <p className="text-sm md:text-base text-[#3e4850] font-medium leading-tight">Escolha uma categoria para adicionar de forma rápida.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                  {registerOptions.map((opt) => (
+                    <button
+                      key={opt.title}
+                      type="button"
+                      onClick={opt.action}
+                      className="flex flex-row md:flex-col items-center text-left md:text-center p-4 md:p-6 rounded-[2rem] border-2 border-transparent hover:border-[#00628c]/20 hover:bg-[#f6f3f2] transition-all group active:scale-95 cursor-pointer bg-white"
+                    >
+                      <div className={cn("w-14 h-14 md:w-20 md:h-20 shrink-0 rounded-2xl md:rounded-3xl flex items-center justify-center mb-0 md:mb-4 mr-4 md:mr-0 transition-transform group-hover:scale-110", opt.color)}>
+                        {React.cloneElement(opt.icon, { className: "w-6 h-6 md:w-8 md:h-8" })}
+                      </div>
+                      <div>
+                        <h3 className="text-base md:text-lg font-black text-[#00628c] mb-0 md:mb-2">{opt.title}</h3>
+                        <p className="text-[10px] md:text-xs text-[#6f7881] font-medium leading-relaxed">{opt.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-6 md:mt-10 pt-6 md:pt-8 border-t border-[#bec8d1]/10 text-center">
+                  <p className="text-xs text-[#6f7881] font-medium italic">
+                    Como Administrador, os cadastros realizados por aqui passarão para o sistema diretamente ativos.
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {isAddingCandidate && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white rounded-3xl p-6 lg:p-8 max-w-2xl w-full shadow-2xl border border-outline-variant/10 max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl lg:text-2xl font-bold text-primary font-headline">Cadastrar Novo Currículo</h2>
+                  <button onClick={() => setIsAddingCandidate(false)} className="p-2 hover:bg-surface-container rounded-full transition-colors cursor-pointer">
+                    <XCircle className="w-6 h-6 text-on-surface-variant" />
+                  </button>
+                </div>
+
+                <form onSubmit={submitCandidate} className="space-y-6">
+                  {/* Avatar Upload */}
+                  <div className="flex flex-col items-center mb-6">
+                     <label className="text-xs font-black uppercase tracking-widest text-[#3e4850] mb-4">Foto de Perfil</label>
+                     <div className="relative group">
+                        <div className="w-28 h-28 rounded-full bg-[#f6f3f2] overflow-hidden border-2 border-dashed border-[#bec8d1] flex items-center justify-center group-hover:border-[#00628c] transition-colors relative shadow-inner">
+                          {candImage ? (
+                            <Image 
+                              src={candImage} 
+                              alt="Avatar" 
+                              fill
+                              className="object-cover rounded-full"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 text-[#6f7881]">
+                              <Upload className="w-6 h-6" />
+                              <span className="text-[9px] font-bold uppercase tracking-widest">Foto</span>
+                            </div>
+                          )}
+                          <div 
+                            onClick={() => candImageInputRef.current?.click()}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer text-white font-bold text-[9px] uppercase tracking-widest text-center px-4 rounded-full"
+                          >
+                            Alterar
+                          </div>
+                        </div>
+                        <input 
+                          type="file" 
+                          ref={candImageInputRef} 
+                          className="hidden" 
+                          accept="image/*" 
+                          onChange={handleCandImageChange}
+                        />
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Nome Completo *</label>
+                      <input name="name" required className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Ex: João da Silva" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">E-mail de Contato *</label>
+                      <input name="email" required type="email" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Ex: joao@email.com" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Telefone / WhatsApp *</label>
+                      <input 
+                        name="phone" 
+                        required 
+                        className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" 
+                        placeholder="(00) 00000-0000"
+                        onChange={e => e.target.value = maskPhone(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Cidade / Estado</label>
+                      <input name="location" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Ex: Porto Alegre, RS" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Cargo / Especialidade</label>
+                      <input name="role" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Ex: Auxiliar Administrativo" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Área Principal</label>
+                      <select name="area" defaultValue="Serviços Gerais" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-bold text-slate-800">
+                        <option>Tecnologia</option>
+                        <option>Saúde</option>
+                        <option>Finanças</option>
+                        <option>Engenharia & Arquitetura</option>
+                        <option>Autônomos</option>
+                        <option>Educação</option>
+                        <option>Serviços Gerais</option>
+                        <option>Outros</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-on-surface-variant uppercase">Resumo Profissional</label>
+                    <div className="bg-[#f6f3f2] rounded-2xl overflow-hidden border border-transparent focus-within:ring-2 focus-within:ring-[#00628c]/40 transition-all text-slate-800">
+                      <ReactQuill 
+                        theme="snow"
+                        value={candSummary}
+                        onChange={setCandSummary}
+                        modules={quillModules}
+                        formats={quillFormats}
+                        placeholder="Conte um pouco sobre suas experiências profissionais..."
+                        className="bg-white min-h-[150px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Skills / tags */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Habilidades / Competências</label>
+                      <span className="text-[10px] text-[#6f7881] font-bold">Pressione Enter ou clique no &quot;+&quot; para adicionar</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Ex: Organização de estoque" 
+                        className="flex-1 p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800"
+                        value={candSkillInput}
+                        onChange={e => setCandSkillInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCandSkill())}
+                      />
+                      <button 
+                        type="button"
+                        onClick={addCandSkill}
+                        className="px-4 bg-[#00628c] text-white rounded-xl hover:scale-105 transition-all cursor-pointer flex items-center justify-center"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {candSkills.map((skill, idx) => (
+                        <span key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00628c]/5 text-[#00628c] font-black uppercase text-[9px] tracking-wider rounded-lg border border-[#00628c]/10">
+                          {skill}
+                          <button type="button" onClick={() => removeCandSkill(idx)} className="cursor-pointer">
+                            <X className="w-3 h-3 hover:text-red-500 transition-colors" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Resumes file list */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-on-surface-variant uppercase">Anexos de Currículo (Opcional)</label>
+                    <div 
+                      onClick={() => candResumeInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-[#bec8d1] rounded-2xl p-6 flex flex-col items-center justify-center gap-2 bg-[#f6f3f2]/30 hover:bg-[#00628c]/5 hover:border-[#00628c] transition-all cursor-pointer"
+                    >
+                      <Upload className="w-6 h-6 text-[#00628c]" />
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-[#3e4850]">Anexar Arquivos de Currículo</p>
+                        <p className="text-[10px] text-[#6f7881] mt-0.5">PDF, DOC, DOCX até 3MB por arquivo</p>
+                      </div>
+                    </div>
+                    <input 
+                      type="file" 
+                      ref={candResumeInputRef} 
+                      className="hidden" 
+                      multiple 
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleCandResumeChange}
+                    />
+                    {candResumes.length > 0 && (
+                      <div className="space-y-1.5 pt-2">
+                        {candResumes.map((res, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2.5 bg-[#f6f3f2]/60 rounded-xl border border-[#bec8d1]/25 text-xs">
+                            <span className="font-bold text-[#3e4850] truncate max-w-xs">{res.name}</span>
+                            <button type="button" onClick={() => removeCandResume(idx)} className="text-red-600 hover:text-red-800 font-bold cursor-pointer">
+                              Remover
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4">
+                    <button type="button" onClick={() => setIsAddingCandidate(false)} className="px-5 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container font-semibold transition-colors cursor-pointer text-sm">
+                      Cancelar
+                    </button>
+                    <button type="submit" className="px-6 py-2.5 bg-primary text-on-primary rounded-xl font-bold hover:scale-105 transition-all shadow-lg shadow-primary/20 cursor-pointer text-sm flex items-center gap-1.5">
+                      <span>Cadastrar Currículo</span>
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+
+          {isAddingNegocio && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white rounded-3xl p-6 lg:p-8 max-w-2xl w-full shadow-2xl border border-outline-variant/10 max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl lg:text-2xl font-bold text-primary font-headline">Cadastrar Novo Negócio</h2>
+                  <button onClick={() => setIsAddingNegocio(false)} className="p-2 hover:bg-surface-container rounded-full transition-colors cursor-pointer">
+                    <XCircle className="w-6 h-6 text-on-surface-variant" />
+                  </button>
+                </div>
+
+                <form onSubmit={submitNegocio} className="space-y-6">
+                  {/* Logo Upload */}
+                  <div className="flex flex-col items-center mb-6">
+                     <label className="text-xs font-black uppercase tracking-widest text-[#3e4850] mb-4">Logo do Negócio</label>
+                     <div className="relative group">
+                        <div className="w-28 h-28 rounded-2xl bg-[#f6f3f2] overflow-hidden border-2 border-dashed border-[#bec8d1] flex items-center justify-center group-hover:border-[#00628c] transition-colors relative shadow-inner">
+                          {negLogoUrl ? (
+                            <Image 
+                              src={negLogoUrl} 
+                              alt="Logo" 
+                              fill
+                              className="object-contain p-2 rounded-2xl"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 text-[#6f7881]">
+                              <Upload className="w-6 h-6" />
+                              <span className="text-[9px] font-bold uppercase tracking-widest">Logo</span>
+                            </div>
+                          )}
+                          <div 
+                            onClick={() => negLogoInputRef.current?.click()}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer text-white font-bold text-[9px] uppercase tracking-widest text-center px-4 rounded-2xl"
+                          >
+                            Alterar
+                          </div>
+                        </div>
+                        <input 
+                          type="file" 
+                          ref={negLogoInputRef} 
+                          className="hidden" 
+                          accept="image/*" 
+                          onChange={handleNegLogoChange}
+                        />
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Título da Oportunidade *</label>
+                      <input name="title" required className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Ex: Expansão de Franquia" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Nome do Negócio / Empresa *</label>
+                      <input name="owner_name" required className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Ex: Café Bela Vista" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Nome do Responsável *</label>
+                      <input name="contact_name" required className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Seu nome completo" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">E-mail de Contato</label>
+                      <input name="contact_email" type="email" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Ex: contato@cafe.com" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">WhatsApp / Telefone</label>
+                      <input 
+                        name="contact_phone" 
+                        className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" 
+                        placeholder="(00) 00000-0000"
+                        onChange={e => e.target.value = maskPhone(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Site ou Link</label>
+                      <input name="link" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium font-mono text-slate-800" placeholder="https://..." />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Localização</label>
+                      <input name="location" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-medium text-slate-800" placeholder="Ex: Porto Alegre, RS" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Tipo de Oportunidade</label>
+                      <select name="type" defaultValue="Parceria" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-bold text-slate-800">
+                        <option>Sócio</option>
+                        <option>Investimento</option>
+                        <option>Parceria</option>
+                        <option>Patrocínio</option>
+                        <option>Venda</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Área / Categoria</label>
+                      <select name="area" defaultValue="Comércio" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none font-bold text-slate-800">
+                        <option>Comércio</option>
+                        <option>Tecnologia</option>
+                        <option>Serviços</option>
+                        <option>Franquias</option>
+                        <option>Esportes</option>
+                        <option>Outros</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-on-surface-variant uppercase">Descrição Detalhada</label>
+                    <div className="bg-[#f6f3f2] rounded-2xl overflow-hidden border border-transparent focus-within:ring-2 focus-within:ring-[#00628c]/40 transition-all text-slate-800">
+                      <ReactQuill 
+                        theme="snow"
+                        value={negDescription}
+                        onChange={setNegDescription}
+                        modules={quillModules}
+                        formats={quillFormats}
+                        placeholder="Descreva o negócio em detalhes..."
+                        className="bg-white min-h-[150px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Business attachments */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-on-surface-variant uppercase">Anexos / Arquivos (Opcional)</label>
+                    <div 
+                      onClick={() => negAttachmentInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-[#bec8d1] rounded-2xl p-6 flex flex-col items-center justify-center gap-2 bg-[#f6f3f2]/30 hover:bg-[#00628c]/5 hover:border-[#00628c] transition-all cursor-pointer"
+                    >
+                      <Upload className="w-6 h-6 text-[#00628c]" />
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-[#3e4850]">Anexar Arquivos do Negócio</p>
+                        <p className="text-[10px] text-[#6f7881] mt-0.5">Formatos aceitos: PDF, Imagens até 3MB por arquivo</p>
+                      </div>
+                    </div>
+                    <input 
+                      type="file" 
+                      ref={negAttachmentInputRef} 
+                      className="hidden" 
+                      multiple 
+                      accept=".pdf,image/*"
+                      onChange={handleNegAttachmentChange}
+                    />
+                    {negAttachments.length > 0 && (
+                      <div className="space-y-1.5 pt-2">
+                        {negAttachments.map((att, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2.5 bg-[#f6f3f2]/60 rounded-xl border border-[#bec8d1]/25 text-xs">
+                            <span className="font-bold text-[#3e4850] truncate max-w-xs">{att.name}</span>
+                            <button type="button" onClick={() => removeNegAttachment(idx)} className="text-red-600 hover:text-red-800 font-bold cursor-pointer">
+                              Remover
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4">
+                    <button type="button" onClick={() => setIsAddingNegocio(false)} className="px-5 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container font-semibold transition-colors cursor-pointer text-sm">
+                      Cancelar
+                    </button>
+                    <button type="submit" className="px-6 py-2.5 bg-primary text-on-primary rounded-xl font-bold hover:scale-105 transition-all shadow-lg shadow-primary/20 cursor-pointer text-sm flex items-center gap-1.5">
+                      <span>Cadastrar Negócio</span>
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+
           {isAddingJob && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
               <motion.div 
@@ -2393,6 +3231,7 @@ export default function Dashboard() {
                     salary: newJobSalaryNegotiable ? 'A combinar' : (formData.get('salary') as string || ''),
                     description: richDescription,
                     requirements: (formData.get('requirements') as string).split('\n').filter(r => r.trim()),
+                    attachment_url: attachments.length > 0 ? JSON.stringify(attachments) : '',
                   });
                 }} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2494,6 +3333,47 @@ export default function Dashboard() {
                     <label className="text-xs font-bold text-on-surface-variant uppercase">Requisitos (um por linha)</label>
                     <textarea name="requirements" rows={3} className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="Ex: React&#10;TypeScript&#10;Tailwind"></textarea>
                   </div>
+
+                  {/* Attachment Section */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-on-surface-variant uppercase">Anexos / Documentos (Opcional)</label>
+                      <button
+                        type="button"
+                        onClick={() => attachmentInputRef.current?.click()}
+                        className="text-xs font-bold text-primary flex items-center gap-1.5 hover:opacity-80 transition-opacity bg-primary/10 px-3 py-1.5 rounded-xl cursor-pointer"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" /> Adicionar Arquivos
+                      </button>
+                    </div>
+                    
+                    <input 
+                      type="file"
+                      ref={attachmentInputRef}
+                      onChange={handleAttachmentChange}
+                      className="hidden"
+                      multiple
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    />
+
+                    {attachments.length > 0 && (
+                      <div className="space-y-2 bg-surface-container-low p-3 rounded-2xl border border-outline-variant/10">
+                        {attachments.map((file, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-outline-variant/5 shadow-sm text-sm">
+                            <span className="font-medium truncate max-w-[80%]">{file.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(idx)}
+                              className="text-error hover:bg-error/10 p-1 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex gap-3 pt-4">
                     <button type="button" onClick={() => setIsAddingJob(false)} className="flex-1 py-3 px-4 bg-surface-container-highest text-on-surface rounded-xl font-bold hover:bg-surface-container transition-all">Cancelar</button>
                     <button type="submit" className="flex-1 py-3 px-4 bg-primary text-on-primary rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all">Publicar Vaga</button>
@@ -2505,7 +3385,7 @@ export default function Dashboard() {
 
           {/* Right Panel (Contextual Detail) */}
           <AnimatePresence mode="wait">
-            {(activeView === 'vagas' && selectedJob) && (
+            {((activeView === 'vagas' || (activeView === 'pendentes' && activePendingSubTab === 'vagas')) && selectedJob) && (
               <motion.aside 
                 key={`job-${selectedJob.id}`}
                 initial={{ x: '100%' }}
@@ -2755,7 +3635,7 @@ export default function Dashboard() {
               </motion.aside>
             )}
 
-            {(selectedCandidate && (activeView === 'curriculos' || activeView === 'galeria')) && (
+            {(selectedCandidate && (activeView === 'curriculos' || activeView === 'galeria' || (activeView === 'pendentes' && activePendingSubTab === 'curriculos'))) && (
               <motion.aside 
                 key={`candidate-${selectedCandidate.id}`}
                 initial={{ x: '100%' }}
@@ -2884,7 +3764,7 @@ export default function Dashboard() {
               </motion.aside>
             )}
 
-            {(selectedNegocio && (activeView === 'negocios' || activeView === 'galeria_negocios')) && (
+            {(selectedNegocio && (activeView === 'negocios' || activeView === 'galeria_negocios' || (activeView === 'pendentes' && activePendingSubTab === 'negocios'))) && (
               <motion.aside 
                 key={`negocio-${selectedNegocio.id}`}
                 initial={{ x: '100%' }}
@@ -3943,6 +4823,38 @@ export default function Dashboard() {
           </motion.div>
         </div>
       )}
+
+      {/* Error Modal Popup for attachments */}
+      <AnimatePresence>
+        {errorModal.isOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[210] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-md w-full shadow-2xl border border-red-100 text-center relative overflow-hidden"
+            >
+              {/* Top accent bar */}
+              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-500 to-red-500" />
+              
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <XCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-black text-[#1a2b3b] mb-3">{errorModal.title}</h3>
+              <p className="text-[#6f7881] text-sm mb-8 leading-relaxed">
+                {errorModal.message}
+              </p>
+              <button 
+                type="button"
+                onClick={() => setErrorModal(prev => ({ ...prev, isOpen: false }))}
+                className="w-full py-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-red-500/20 cursor-pointer"
+              >
+                Entendi e vou corrigir
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Background Editorial Element */}
       <div className="fixed bottom-0 right-0 -z-10 opacity-5 pointer-events-none transform translate-x-1/4 translate-y-1/4 select-none">
