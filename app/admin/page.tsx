@@ -119,6 +119,7 @@ interface Testimonial {
   name: string;
   role?: string;
   company?: string;
+  email?: string;
   content: string;
   photo_url?: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -593,9 +594,12 @@ export default function Dashboard() {
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const attachmentInputRef = React.useRef<HTMLInputElement>(null);
 
+  const [rejectionJustification, setRejectionJustification] = useState('');
+  const [isNotifyChecked, setIsNotifyChecked] = useState(true);
+
   const [confirmAction, setConfirmAction] = useState<{
     type: 'approve' | 'reject' | 'delete' | 'edit';
-    target: 'job' | 'candidate' | 'negocio' | 'noticia';
+    target: 'job' | 'candidate' | 'negocio' | 'noticia' | 'depoimento';
     id: string | number;
     payload?: any;
   } | null>(null);
@@ -719,6 +723,30 @@ export default function Dashboard() {
   const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
     setShowToast({ message, type });
     setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const sendNotificationEmail = async (toEmail: string, subject: string, htmlContent: string) => {
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: toEmail,
+          subject,
+          html: htmlContent,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao comunicar com o servidor de e-mails.');
+      }
+      return data;
+    } catch (error: any) {
+      console.error('Error in sendNotificationEmail:', error);
+      throw error;
+    }
   };
 
   const renderPendingTabs = () => {
@@ -851,6 +879,12 @@ export default function Dashboard() {
     const job = jobs.find(j => String(j.id) === String(id));
     if (!job) return;
 
+    const email = job.contact_email || job.email;
+    if (isNotifyChecked && !email) {
+      triggerToast('Erro: Não há e-mail de contato cadastrado para a vaga.', 'error');
+      return;
+    }
+
     const { data, error } = await supabase
       .from('vagas')
       .update({ status: 'rejected' })
@@ -860,10 +894,36 @@ export default function Dashboard() {
     if (!error && data && data.length > 0) {
       setJobs(prev => prev.map(j => String(j.id) === String(id) ? { ...j, status: 'rejected' } : j));
       triggerToast('Vaga recusada.');
+
+      if (isNotifyChecked && email) {
+        try {
+          await sendNotificationEmail(
+            email,
+            'Atualização sobre sua vaga na Corrente do Bem',
+            `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, anunciante!</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agradecemos por enviar a sua vaga "<strong>${job.title}</strong>" na plataforma <strong>Corrente do Bem</strong>.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Após análise de moderação, informamos que a publicação da vaga foi <strong>recusada</strong>.</p>
+                <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 8px;">
+                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo / Justificativa detalhada:</strong>
+                  <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada para correção informada.'}"</p>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Se desejar, você pode efetuar os ajustes sugeridos e submeter um novo anúncio de vaga.</p>
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
+                <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
+              </div>
+            `
+          );
+          triggerToast('E-mail de notificação enviado com sucesso!', 'success');
+        } catch (mailError: any) {
+          triggerToast(`Vaga recusada, mas erro ao enviar e-mail: ${mailError.message}`, 'error');
+        }
+      }
       
       const historyEntry = {
         action: 'Vaga Recusada',
-        details: `Vaga "${job.title}" da empresa "${job.company}" foi recusada.`
+        details: `Vaga "${job.title}" da empresa "${job.company}" foi recusada. Justificativa: ${rejectionJustification || 'Nenhuma'}`
       };
       
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
@@ -874,7 +934,7 @@ export default function Dashboard() {
     } else {
       triggerToast(error ? `Erro: ${error.message}` : 'Erro ao recusar vaga.', 'error');
     }
-  }, [jobs]);
+  }, [jobs, isNotifyChecked, rejectionJustification]);
 
   const deleteJob = React.useCallback(async (id: string | number) => {
     const job = jobs.find(j => String(j.id) === String(id));
@@ -934,6 +994,12 @@ export default function Dashboard() {
     const cand = candidates.find(c => String(c.id) === String(id));
     if (!cand) return;
 
+    const email = cand.email;
+    if (isNotifyChecked && !email) {
+      triggerToast('Erro: Não há e-mail cadastrado para o candidato.', 'error');
+      return;
+    }
+
     const { data, error } = await supabase
       .from('talentos')
       .update({ status: 'rejected' })
@@ -943,10 +1009,36 @@ export default function Dashboard() {
     if (!error && data && data.length > 0) {
       setCandidates(prev => prev.map(c => String(c.id) === String(id) ? { ...c, status: 'rejected' } : c));
       triggerToast('Currículo recusado.');
+
+      if (isNotifyChecked && email) {
+        try {
+          await sendNotificationEmail(
+            email,
+            'Atualização sobre seu cadastro na Corrente do Bem',
+            `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${cand.name}!</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agradecemos pelo cadastro de seu perfil profissional "<strong>${cand.role}</strong>" na plataforma <strong>Corrente do Bem</strong>.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Após análise do nosso time, informamos que o seu currículo foi <strong>recusado</strong> para publicação pública.</p>
+                <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 8px;">
+                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Observação da moderação:</strong>
+                  <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada para correção informada.'}"</p>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Se julgar pertinente, sinta-se à vontade para efetuar as correções indicadas e registrar novamente o seu currículo.</p>
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
+                <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
+              </div>
+            `
+          );
+          triggerToast('E-mail de notificação enviado para o candidato!', 'success');
+        } catch (mailError: any) {
+          triggerToast(`Currículo recusado, mas erro ao enviar e-mail: ${mailError.message}`, 'error');
+        }
+      }
       
       const historyEntry = {
         action: 'Currículo Recusado',
-        details: `Currículo de "${cand.name}" foi recusado.`
+        details: `Currículo de "${cand.name}" foi recusado. Justificativa: ${rejectionJustification || 'Nenhuma'}`
       };
       
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
@@ -957,7 +1049,7 @@ export default function Dashboard() {
     } else {
       triggerToast(error ? `Erro: ${error.message}` : 'Erro ao recusar currículo.', 'error');
     }
-  }, [candidates]);
+  }, [candidates, isNotifyChecked, rejectionJustification]);
 
   const approveTestimonial = React.useCallback(async (id: string | number) => {
     const testimonial = testimonials.find(t => String(t.id) === String(id));
@@ -989,6 +1081,12 @@ export default function Dashboard() {
     const testimonial = testimonials.find(t => String(t.id) === String(id));
     if (!testimonial) return;
 
+    const email = testimonial.email;
+    if (isNotifyChecked && !email) {
+      triggerToast('Erro: Não há e-mail cadastrado para o depoimento.', 'error');
+      return;
+    }
+
     const { data, error } = await supabase
       .from('testimonials')
       .update({ status: 'rejected' })
@@ -999,17 +1097,46 @@ export default function Dashboard() {
     if (!error && data) {
       setTestimonials(prev => prev.map(t => String(t.id) === String(id) ? data : t));
       triggerToast('Depoimento recusado.');
-      
+
+      if (isNotifyChecked && email) {
+        try {
+          await sendNotificationEmail(
+            email,
+            'Atualização sobre seu depoimento na Corrente do Bem',
+            `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${testimonial.name}!</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agradecemos por compartilhar o seu depoimento na plataforma <strong>Corrente do Bem</strong>.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Durante a moderação de nossos depoimentos de impacto, informamos que o seu depoimento foi <strong>recusado</strong> para publicação.</p>
+                <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 8px;">
+                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo indicado:</strong>
+                  <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada informada.'}"</p>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Valorizamos de coração sua participação na rede e desejamos as melhores realizações em sua caminhada!</p>
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
+                <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
+              </div>
+            `
+          );
+          triggerToast('E-mail de notificação enviado para o autor do depoimento!', 'success');
+        } catch (mailError: any) {
+          triggerToast(`Depoimento recusado, mas erro ao enviar e-mail: ${mailError.message}`, 'error');
+        }
+      }
+
       const historyEntry = {
         action: 'Depoimento Recusado',
-        details: `Depoimento de "${testimonial.name}" foi recusado.`
+        details: `Depoimento de "${testimonial.name}" foi recusado. Justificativa: ${rejectionJustification || 'Nenhuma'}`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
+
+      setSelectedTestimonial(null);
+      setConfirmAction(null);
     } else {
       triggerToast(error ? error.message : 'Erro ao recusar depoimento', 'error');
     }
-  }, [testimonials]);
+  }, [testimonials, isNotifyChecked, rejectionJustification]);
 
   const deleteTestimonial = React.useCallback(async (id: string | number) => {
     const testimonial = testimonials.find(t => String(t.id) === String(id));
@@ -1449,21 +1576,56 @@ export default function Dashboard() {
   const rejectNegocio = React.useCallback(async (id: string | number) => {
     const negocio = negocios.find(n => String(n.id) === String(id));
     if (!negocio) return;
+
+    const email = negocio.contact_email;
+    if (isNotifyChecked && !email) {
+      triggerToast('Erro: Não há e-mail de contato cadastrado para este negócio.', 'error');
+      return;
+    }
+
     const { data, error } = await supabase.from('negocios').update({ status: 'rejected' }).eq('id', id).select();
     if (!error && data && data.length > 0) {
       setNegocios(prev => prev.map(n => String(n.id) === String(id) ? { ...n, status: 'rejected' } : n));
       triggerToast('Negócio recusado.');
+
+      if (isNotifyChecked && email) {
+        try {
+          await sendNotificationEmail(
+            email,
+            'Atualização sobre seu anúncio de negócio na Corrente do Bem',
+            `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${negocio.owner_name}!</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Analisamos a proposta de negócio "<strong>${negocio.title}</strong>" que você publicou na plataforma <strong>Corrente do Bem</strong>.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Lamentamos informar que a publicação do seu negócio foi <strong>recusada</strong> pela nossa moderação.</p>
+                <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 8px;">
+                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo indicado:</strong>
+                  <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada informada.'}"</p>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Se desejar, você pode efetuar os ajustes sugeridos e submeter uma nova oportunidade de negócio.</p>
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
+                <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
+              </div>
+            `
+          );
+          triggerToast('E-mail de notificação enviado com sucesso!', 'success');
+        } catch (mailError: any) {
+          triggerToast(`Negócio recusado, mas erro ao enviar e-mail: ${mailError.message}`, 'error');
+        }
+      }
+
       const { data: hData } = await supabase.from('history').insert({
         action: 'Negócio Recusado',
-        details: `Negócio "${negocio.title}" foi recusado.`
+        details: `Negócio "${negocio.title}" foi recusado. Justificativa: ${rejectionJustification || 'Nenhuma'}`
       }).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
+
       setSelectedNegocio(null);
       setConfirmAction(null);
     } else {
       triggerToast(error ? `Erro: ${error.message}` : 'Erro ao recusar negócio.', 'error');
     }
-  }, [negocios]);
+  }, [negocios, isNotifyChecked, rejectionJustification]);
 
   const deleteNegocio = React.useCallback(async (id: string | number) => {
     const negocio = negocios.find(n => String(n.id) === String(id));
@@ -2056,7 +2218,11 @@ export default function Dashboard() {
                               Aprovar
                             </button>
                             <button 
-                              onClick={() => rejectTestimonial(t.id)}
+                              onClick={() => {
+                                setRejectionJustification('');
+                                setIsNotifyChecked(true);
+                                setConfirmAction({ type: 'reject', target: 'depoimento', id: t.id });
+                              }}
                               className="px-4 py-2 bg-error text-on-error rounded-xl font-bold text-xs shadow-md shadow-error/20 hover:scale-105 transition-all flex items-center gap-2"
                             >
                               <XCircle className="w-4 h-4" />
@@ -3606,17 +3772,46 @@ export default function Dashboard() {
                     <div>
                       <label className="text-[10px] uppercase font-extrabold text-on-surface-variant mb-2 block ml-1">Justificativa da Recusa</label>
                       <textarea 
+                        value={rejectionJustification}
+                        onChange={(e) => setRejectionJustification(e.target.value)}
                         className="w-full bg-white border-outline-variant/30 rounded-2xl text-sm p-4 focus:ring-primary focus:border-primary min-h-[120px] transition-all" 
                         placeholder="Explique o motivo para que a empresa possa corrigir a vaga..."
                       />
                     </div>
-                    <div className="flex items-center gap-3 px-1">
-                      <input type="checkbox" id="notify" defaultChecked className="rounded text-primary focus:ring-primary w-5 h-5" />
-                      <label htmlFor="notify" className="text-xs font-bold text-on-surface">Notificar por e-mail</label>
-                    </div>
+                    {(() => {
+                      const jobEmail = selectedJob.contact_email || selectedJob.email;
+                      return (
+                        <>
+                          <div className="flex items-center gap-3 px-1">
+                            <input 
+                              type="checkbox" 
+                              id="notify" 
+                              checked={!!jobEmail && isNotifyChecked}
+                              disabled={!jobEmail}
+                              onChange={(e) => setIsNotifyChecked(e.target.checked)}
+                              className="rounded text-primary focus:ring-primary w-5 h-5 disabled:opacity-50" 
+                            />
+                            <label htmlFor="notify" className={cn("text-xs font-bold select-none cursor-pointer", !jobEmail ? "text-error opacity-75" : "text-on-surface")}>
+                              Notificar por e-mail
+                            </label>
+                          </div>
+                          {!jobEmail ? (
+                            <p className="text-[10px] text-error font-medium px-1">
+                              ⚠️ Não há e-mail de contato cadastrado para esta vaga.
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-primary font-medium px-1">
+                              ✓ Notificar: {jobEmail}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
                     <div className="grid grid-cols-2 gap-3 pt-4">
                       <button 
-                        onClick={() => setConfirmAction({ type: 'reject', target: 'job', id: selectedJob.id })}
+                        onClick={() => {
+                          setConfirmAction({ type: 'reject', target: 'job', id: selectedJob.id });
+                        }}
                         className="py-4 px-4 bg-error text-on-error rounded-2xl font-bold text-sm hover:brightness-90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-error/20"
                       >
                         <XCircle className="w-5 h-5" />
@@ -3734,18 +3929,47 @@ export default function Dashboard() {
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 ml-1">Justificativa da Decisão</label>
                     <textarea 
+                      value={rejectionJustification}
+                      onChange={(e) => setRejectionJustification(e.target.value)}
                       className="w-full bg-white border-outline-variant/30 rounded-2xl text-sm p-4 focus:ring-primary focus:border-primary min-h-[100px] transition-all" 
                       placeholder="Insira uma observação ou motivo da recusa/aprovação..."
                     />
                   </div>
                   <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-3 px-1">
-                      <input type="checkbox" id="notify-cand" defaultChecked className="rounded text-primary focus:ring-primary w-5 h-5" />
-                      <label htmlFor="notify-cand" className="text-xs font-bold text-on-surface-variant">Enviar e-mail de notificação para a candidata</label>
-                    </div>
+                    {(() => {
+                      const candEmail = selectedCandidate.email;
+                      return (
+                        <>
+                          <div className="flex items-center gap-3 px-1">
+                            <input 
+                              type="checkbox" 
+                              id="notify-cand" 
+                              checked={!!candEmail && isNotifyChecked}
+                              disabled={!candEmail}
+                              onChange={(e) => setIsNotifyChecked(e.target.checked)}
+                              className="rounded text-primary focus:ring-primary w-5 h-5 disabled:opacity-50" 
+                            />
+                            <label htmlFor="notify-cand" className={cn("text-xs font-bold select-none cursor-pointer", !candEmail ? "text-error opacity-75" : "text-on-surface-variant")}>
+                              Enviar e-mail de notificação para a candidata
+                            </label>
+                          </div>
+                          {!candEmail ? (
+                            <p className="text-[10px] text-error font-medium px-1">
+                              ⚠️ Não há e-mail cadastrado para esta candidata.
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-primary font-medium px-1">
+                              ✓ Notificar: {candEmail}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
                     <div className="flex gap-3">
                       <button 
-                        onClick={() => setConfirmAction({ type: 'reject', target: 'candidate', id: selectedCandidate.id })}
+                        onClick={() => {
+                          setConfirmAction({ type: 'reject', target: 'candidate', id: selectedCandidate.id });
+                        }}
                         className="flex-1 py-4 px-4 bg-error-container text-on-error-container hover:bg-error/10 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2"
                       >
                         <XCircle className="w-5 h-5" />
@@ -4002,15 +4226,55 @@ export default function Dashboard() {
                   </section>
                 </div>
 
-                <div className="bg-orange-50 rounded-3xl p-6 space-y-6 border border-orange-200">
+                <div className="bg-orange-50 rounded-3xl p-6 space-y-4 border border-orange-200">
                   <h4 className="text-sm font-bold text-orange-900 flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5" />
+                    <ShieldCheck className="w-5 h-5 text-orange-600" />
                     Moderação de Negócios
                   </h4>
-                  <div className="flex flex-col gap-4">
-                    <div className="flex gap-3">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] uppercase font-extrabold text-orange-900 mb-2 block ml-1">Justificativa da Recusa</label>
+                      <textarea 
+                        value={rejectionJustification}
+                        onChange={(e) => setRejectionJustification(e.target.value)}
+                        className="w-full bg-white border border-orange-200 rounded-2xl text-sm p-4 focus:ring-orange-600 focus:border-orange-600 min-h-[100px] transition-all" 
+                        placeholder="Motivo da recusa do anúncio de negócio..."
+                      />
+                    </div>
+                    {(() => {
+                      const negEmail = selectedNegocio.contact_email;
+                      return (
+                        <>
+                          <div className="flex items-center gap-3 px-1">
+                            <input 
+                              type="checkbox" 
+                              id="notify-neg" 
+                              checked={!!negEmail && isNotifyChecked}
+                              disabled={!negEmail}
+                              onChange={(e) => setIsNotifyChecked(e.target.checked)}
+                              className="rounded text-orange-600 focus:ring-orange-600 w-5 h-5 disabled:opacity-50" 
+                            />
+                            <label htmlFor="notify-neg" className={cn("text-xs font-bold select-none cursor-pointer", !negEmail ? "text-error opacity-75" : "text-orange-905")}>
+                              Notificar por e-mail
+                            </label>
+                          </div>
+                          {!negEmail ? (
+                            <p className="text-[10px] text-error font-medium px-1">
+                              ⚠️ Não há e-mail de contato cadastrado para este negócio.
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-orange-850 font-medium px-1">
+                              ✓ Notificar: {negEmail}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
+                    <div className="flex gap-3 pt-2">
                       <button 
-                        onClick={() => setConfirmAction({ type: 'reject', target: 'negocio' as any, id: selectedNegocio.id })}
+                        onClick={() => {
+                          setConfirmAction({ type: 'reject', target: 'negocio' as any, id: selectedNegocio.id });
+                        }}
                         className="flex-1 py-4 px-4 bg-white border-2 border-error text-error hover:bg-error/5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2"
                       >
                         <XCircle className="w-5 h-5" />
@@ -4752,77 +5016,171 @@ export default function Dashboard() {
           </div>
         )}
 
-      {confirmAction && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-10 max-w-md w-full shadow-2xl text-center border border-outline-variant/10"
-          >
-            <div className={cn(
-              "w-16 lg:w-20 h-16 lg:h-20 rounded-2xl lg:rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-xl",
-              confirmAction.type === 'approve' ? "bg-tertiary/10 text-tertiary" : 
-              confirmAction.type === 'reject' ? "bg-error/10 text-error" :
-              confirmAction.type === 'delete' ? "bg-error text-white" : "bg-primary/10 text-primary"
-            )}>
-              {confirmAction.type === 'approve' ? <CheckCircle2 className="w-10 h-10" /> : 
-               confirmAction.type === 'reject' ? <XCircle className="w-10 h-10" /> :
-               confirmAction.type === 'delete' ? <Trash2 className="w-10 h-10" /> : <Edit className="w-10 h-10" />}
-            </div>
-            <h2 className="text-2xl font-extrabold text-on-surface mb-3 font-headline">
-              {confirmAction.type === 'approve' ? 'Confirmar Aprovação?' : 
-               confirmAction.type === 'reject' ? 'Confirmar Recusa?' :
-               confirmAction.type === 'delete' ? 'Confirmar Exclusão?' : 'Confirmar Alteração?'}
-            </h2>
-            <p className="text-on-surface-variant text-sm mb-8 leading-relaxed">
-              Você tem certeza que deseja {
-                confirmAction.type === 'approve' ? 'aprovar' : 
-                confirmAction.type === 'reject' ? 'recusar' :
-                confirmAction.type === 'delete' ? 'excluir permanentemente' : 'salvar as alterações deste'
-              } {confirmAction.target === 'job' ? 'vaga' : confirmAction.target === 'candidate' ? 'candidato' : confirmAction.target === 'noticia' ? 'notícia' : 'negócio'}? 
-              Esta ação será registrada no histórico do sistema.
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <button 
-                onClick={() => setConfirmAction(null)}
-                className="py-4 px-6 bg-surface-container-highest text-on-surface rounded-2xl font-bold text-sm hover:bg-surface-container transition-all active:scale-95"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => {
-                  if (confirmAction.target === 'job') {
-                    if (confirmAction.type === 'approve') approveJob(confirmAction.id);
-                    else if (confirmAction.type === 'reject') rejectJob(confirmAction.id);
-                    else if (confirmAction.type === 'delete') deleteJob(confirmAction.id);
-                    else if (confirmAction.type === 'edit') updateJob(confirmAction.payload);
-                  } else if (confirmAction.target === 'candidate') {
-                    if (confirmAction.type === 'approve') approveCandidate(confirmAction.id);
-                    else if (confirmAction.type === 'reject') rejectCandidate(confirmAction.id);
-                    else if (confirmAction.type === 'delete') deleteCandidate(confirmAction.id);
-                    else if (confirmAction.type === 'edit') updateCandidate(confirmAction.payload);
-                  } else if (confirmAction.target === 'negocio') {
-                    if (confirmAction.type === 'approve') approveNegocio(confirmAction.id);
-                    else if (confirmAction.type === 'reject') rejectNegocio(confirmAction.id);
-                    else if (confirmAction.type === 'delete') deleteNegocio(confirmAction.id);
-                    else if (confirmAction.type === 'edit') updateNegocio(confirmAction.payload);
-                  } else if (confirmAction.target === 'noticia') {
-                    if (confirmAction.type === 'delete') deleteNoticia(confirmAction.id);
-                  }
-                }}
-                className={cn(
-                  "py-4 px-6 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg",
-                  confirmAction.type === 'approve' ? "bg-primary text-on-primary shadow-primary/20" : 
-                  confirmAction.type === 'delete' ? "bg-error text-on-error shadow-error/20" :
-                  confirmAction.type === 'reject' ? "bg-error text-on-error shadow-error/20" : "bg-primary text-on-primary shadow-primary/20"
-                )}
-              >
-                Confirmar
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      {confirmAction && (() => {
+        const getTargetLabel = () => {
+          switch (confirmAction.target) {
+            case 'job': return 'a vaga';
+            case 'candidate': return 'o candidato';
+            case 'negocio': return 'o negócio';
+            case 'noticia': return 'a notícia';
+            case 'depoimento': return 'o depoimento';
+            default: return 'o registro';
+          }
+        };
+
+        const getTargetItemName = () => {
+          const { target, id } = confirmAction;
+          if (target === 'job') {
+            return jobs.find(j => String(j.id) === String(id))?.title || '';
+          }
+          if (target === 'candidate') {
+            return candidates.find(c => String(c.id) === String(id))?.name || '';
+          }
+          if (target === 'negocio') {
+            return negocios.find(n => String(n.id) === String(id))?.title || '';
+          }
+          if (target === 'depoimento') {
+            return testimonials.find(t => String(t.id) === String(id))?.name || '';
+          }
+          return '';
+        };
+
+        const getTargetItemEmail = () => {
+          const { target, id } = confirmAction;
+          if (target === 'job') {
+            const job = jobs.find(j => String(j.id) === String(id));
+            return job?.contact_email || job?.email || null;
+          }
+          if (target === 'candidate') {
+            return candidates.find(c => String(c.id) === String(id))?.email || null;
+          }
+          if (target === 'negocio') {
+            return negocios.find(n => String(n.id) === String(id))?.contact_email || null;
+          }
+          if (target === 'depoimento') {
+            return testimonials.find(t => String(t.id) === String(id))?.email || null;
+          }
+          return null;
+        };
+
+        const targetLabel = getTargetLabel();
+        const targetItemName = getTargetItemName();
+        const targetItemEmail = getTargetItemEmail();
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-10 max-w-md w-full shadow-2xl text-center border border-outline-variant/10"
+            >
+              <div className={cn(
+                "w-16 lg:w-20 h-16 lg:h-20 rounded-2xl lg:rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-xl",
+                confirmAction.type === 'approve' ? "bg-tertiary/10 text-tertiary" : 
+                confirmAction.type === 'reject' ? "bg-error/10 text-error" :
+                confirmAction.type === 'delete' ? "bg-error text-white" : "bg-primary/10 text-primary"
+              )}>
+                {confirmAction.type === 'approve' ? <CheckCircle2 className="w-10 h-10" /> : 
+                 confirmAction.type === 'reject' ? <XCircle className="w-10 h-10" /> :
+                 confirmAction.type === 'delete' ? <Trash2 className="w-10 h-10" /> : <Edit className="w-10 h-10" />}
+              </div>
+              <h2 className="text-2xl font-extrabold text-on-surface mb-2 font-headline">
+                {confirmAction.type === 'approve' ? 'Confirmar Aprovação?' : 
+                 confirmAction.type === 'reject' ? 'Confirmar Recusa?' :
+                 confirmAction.type === 'delete' ? 'Confirmar Exclusão?' : 'Confirmar Alteração?'}
+              </h2>
+              <p className="text-on-surface-variant text-sm mb-4 leading-relaxed">
+                Você tem certeza que deseja <strong>{
+                  confirmAction.type === 'approve' ? 'aprovar' : 
+                  confirmAction.type === 'reject' ? 'recusar' :
+                  confirmAction.type === 'delete' ? 'excluir permanentemente' : 'salvar as alterações deste'
+                }</strong> {targetLabel} {targetItemName && <span> &quot;<strong>{targetItemName}</strong>&quot;</span>}?
+              </p>
+
+              {confirmAction.type === 'reject' && (
+                <div className="mb-6 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/10 text-left space-y-3">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-on-surface-variant block mb-1">Justificativa da Recusa</label>
+                    <textarea 
+                      value={rejectionJustification}
+                      onChange={(e) => setRejectionJustification(e.target.value)}
+                      className="w-full bg-white border border-outline-variant/30 rounded-xl text-xs p-3 focus:ring-primary focus:border-primary min-h-[80px] transition-all" 
+                      placeholder="Motivo detalhado para que o autor possa corrigir o envio..."
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="modal-notify-cb" 
+                      checked={!!targetItemEmail && isNotifyChecked}
+                      disabled={!targetItemEmail}
+                      onChange={(e) => setIsNotifyChecked(e.target.checked)}
+                      className="rounded text-primary focus:ring-primary w-4 h-4 disabled:opacity-50" 
+                    />
+                    <label htmlFor="modal-notify-cb" className={cn("text-xs font-bold select-none cursor-pointer", !targetItemEmail ? "text-error opacity-70 cursor-not-allowed" : "text-on-surface")}>
+                      Notificar por e-mail
+                    </label>
+                  </div>
+                  {!targetItemEmail ? (
+                    <div className="text-[10px] text-error font-medium leading-relaxed bg-error/5 p-2 rounded-lg border border-error/10">
+                      ⚠️ Não há e-mail de contato cadastrado para este registro. Não será possível enviar a notificação automática.
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-[#00628c] font-medium leading-relaxed bg-[#00628c]/5 p-2 rounded-lg border border-[#00628c]/10">
+                      ✓ Notificação por e-mail será enviada para: <span className="underline font-semibold">{targetItemEmail}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[11px] text-[#6f7881] mb-6 leading-relaxed">
+                Esta ação será registrada no histórico de auditoria do sistema.
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => setConfirmAction(null)}
+                  className="py-4 px-6 bg-surface-container-highest text-on-surface rounded-2xl font-bold text-sm hover:bg-surface-container transition-all active:scale-95"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={() => {
+                    if (confirmAction.target === 'job') {
+                      if (confirmAction.type === 'approve') approveJob(confirmAction.id);
+                      else if (confirmAction.type === 'reject') rejectJob(confirmAction.id);
+                      else if (confirmAction.type === 'delete') deleteJob(confirmAction.id);
+                      else if (confirmAction.type === 'edit') updateJob(confirmAction.payload);
+                    } else if (confirmAction.target === 'candidate') {
+                      if (confirmAction.type === 'approve') approveCandidate(confirmAction.id);
+                      else if (confirmAction.type === 'reject') rejectCandidate(confirmAction.id);
+                      else if (confirmAction.type === 'delete') deleteCandidate(confirmAction.id);
+                      else if (confirmAction.type === 'edit') updateCandidate(confirmAction.payload);
+                    } else if (confirmAction.target === 'negocio') {
+                      if (confirmAction.type === 'approve') approveNegocio(confirmAction.id);
+                      else if (confirmAction.type === 'reject') rejectNegocio(confirmAction.id);
+                      else if (confirmAction.type === 'delete') deleteNegocio(confirmAction.id);
+                      else if (confirmAction.type === 'edit') updateNegocio(confirmAction.payload);
+                    } else if (confirmAction.target === 'noticia') {
+                      if (confirmAction.type === 'delete') deleteNoticia(confirmAction.id);
+                    } else if (confirmAction.target === 'depoimento') {
+                      if (confirmAction.type === 'reject') rejectTestimonial(confirmAction.id);
+                    }
+                  }}
+                  className={cn(
+                    "py-4 px-6 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg",
+                    confirmAction.type === 'approve' ? "bg-primary text-on-primary shadow-primary/20" : 
+                    confirmAction.type === 'delete' ? "bg-error text-on-error shadow-error/20" :
+                    confirmAction.type === 'reject' ? "bg-error text-on-error shadow-error/20" : "bg-primary text-on-primary shadow-primary/20"
+                  )}
+                >
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        );
+      })()}
 
       {/* Error Modal Popup for attachments */}
       <AnimatePresence>

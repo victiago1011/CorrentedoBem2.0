@@ -107,6 +107,7 @@ export default function NewTestimonial() {
       name: formData.get('name') as string,
       role: formData.get('role') as string,
       company: formData.get('company') as string,
+      email: formData.get('email') as string || null,
       content: formData.get('content') as string,
       photo_url: photoUrl,
       status: 'pending'
@@ -226,16 +227,30 @@ export default function NewTestimonial() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-bold text-[#1b1c1c] uppercase tracking-wider">
-              <Building2 className="w-4 h-4 text-[#00628c]" />
-              Empresa <span className="text-[#bec8d1] font-normal normal-case ml-1">(Opcional)</span>
-            </label>
-            <input 
-              name="company" 
-              className="w-full px-6 py-4 rounded-2xl bg-[#f6f3f2] border-none focus:ring-2 focus:ring-[#00628c]/40 outline-none transition-all font-medium" 
-              placeholder="Nome da sua empresa" 
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-bold text-[#1b1c1c] uppercase tracking-wider">
+                <Building2 className="w-4 h-4 text-[#00628c]" />
+                Empresa <span className="text-[#bec8d1] font-normal normal-case ml-1">(Opcional)</span>
+              </label>
+              <input 
+                name="company" 
+                className="w-full px-6 py-4 rounded-2xl bg-[#f6f3f2] border-none focus:ring-2 focus:ring-[#00628c]/40 outline-none transition-all font-medium" 
+                placeholder="Nome da sua empresa" 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-bold text-[#1b1c1c] uppercase tracking-wider">
+                <span className="text-[#00628c] font-black mr-0.5">@</span>
+                E-mail de Contato <span className="text-[#bec8d1] font-normal normal-case ml-1">(Opcional)</span>
+              </label>
+              <input 
+                name="email" 
+                type="email"
+                className="w-full px-6 py-4 rounded-2xl bg-[#f6f3f2] border-none focus:ring-2 focus:ring-[#00628c]/40 outline-none transition-all font-medium" 
+                placeholder="Ex: seu@email.com" 
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
