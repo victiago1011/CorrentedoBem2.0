@@ -403,6 +403,22 @@ const Sidebar = ({ activeView, setView, isOpen, onClose, totalPendingCount = 0 }
               )}
             </button>
           ))}
+          
+          <Link
+            href="/admin/emails"
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group text-on-surface-variant hover:bg-surface-container-low"
+            onClick={() => {
+              if (window.innerWidth < 1024) onClose();
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <span className="transition-transform group-hover:scale-110 text-on-surface-variant">
+                <Mail className="w-5 h-5" />
+              </span>
+              <span className="text-sm">Campanhas de E-mail</span>
+            </div>
+            <ExternalLink className="w-4 h-4 text-on-surface-variant/35 group-hover:text-primary transition-colors-slow" />
+          </Link>
         </nav>
 
         <div className="px-6 mt-auto space-y-2">

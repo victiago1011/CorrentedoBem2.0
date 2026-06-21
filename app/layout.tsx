@@ -1,6 +1,7 @@
 import type {Metadata} from 'next';
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
+import AnalyticsTracker from '@/app/components/AnalyticsTracker';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -24,6 +25,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="pt-BR" className={`${inter.variable} ${plusJakarta.variable}`}>
       <body suppressHydrationWarning className="font-sans antialiased bg-[#fcf9f8] text-[#1b1c1c]">
+        <AnalyticsTracker />
         {children}
       </body>
     </html>
