@@ -200,6 +200,57 @@ export default function CadastrarNegocioPage() {
         });
         throw new Error(`${error.message} (${error.hint || 'Sem dicas adicionais'})`);
       }
+
+      // Enviar notificação de e-mail ao administrador
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: 'robinho@correntedobembr.com.br',
+            subject: '🔔 Novo Negócio Cadastrado na Corrente do Bem',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">🔔 Nova Proposta de Negócio Recebida!</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Uma nova oportunidade ou proposta de negócio foi cadastrada no site e está aguardando revisão no Painel Admin.</p>
+                
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; margin: 20px 0; border-radius: 12px;">
+                  <h3 style="margin-top: 0; font-size: 16px; color: #0f172a;">Detalhes do Negócio</h3>
+                  <table style="width: 100%; font-size: 13px; color: #475569; border-collapse: collapse;">
+                    <tr>
+                      <td style="padding: 6px 0; font-weight: bold; width: 150px;">Título do Negócio:</td>
+                      <td style="padding: 6px 0; color: #010101;">${formData.title}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; font-weight: bold;">Nome do Dono:</td>
+                      <td style="padding: 6px 0; color: #010101;">${formData.owner_name}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; font-weight: bold;">E-mail do Proprietário:</td>
+                      <td style="padding: 6px 0; color: #010101;">${formData.contact_email || 'Não informado'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; font-weight: bold;">Telefone:</td>
+                      <td style="padding: 6px 0; color: #010101;">${formData.contact_phone || 'Não informado'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; font-weight: bold;">Tipo/Área:</td>
+                      <td style="padding: 6px 0; color: #010101;">${formData.type || 'Não informado'} / ${formData.area || 'Não informado'}</td>
+                    </tr>
+                  </table>
+                </div>
+
+                <div style="text-align: center; margin-top: 25px;">
+                  <a href="https://correntedobembr.com.br/admin" style="background-color: #00628c; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block;">Acessar Painel de Moderação</a>
+                </div>
+              </div>
+            `
+          })
+        });
+      } catch (err) {
+        console.error('Erro ao enviar e-mail de notificação de negócio:', err);
+      }
+
       setIsSuccess(true);
     } catch (error: any) {
       console.error('Erro ao cadastrar negócio:', error);

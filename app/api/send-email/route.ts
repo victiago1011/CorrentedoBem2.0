@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        from: 'Corrente do Bem <onboarding@resend.dev>', // Resend permite onboarding@resend.dev por padrão em contas gratuitas
+        from: 'Corrente do Bem <contato@send.correntedobembr.com.br>',
         to: [to],
         subject: subject,
         html: html,

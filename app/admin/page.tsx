@@ -830,7 +830,7 @@ export default function Dashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -858,6 +858,32 @@ export default function Dashboard() {
     if (!error && data && data.length > 0) {
       setJobs(prev => prev.map(j => String(j.id) === String(id) ? { ...j, status: 'active' } : j));
       triggerToast('Vaga aprovada com sucesso!');
+
+      const email = job.contact_email || job.email;
+      if (email) {
+        try {
+          await sendNotificationEmail(
+            email,
+            'Sua vaga foi aprovada na Corrente do Bem! 🎉',
+            `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá! Notícia maravilhosa! 🎉</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Temos o prazer de informar que a sua vaga "<strong>${job.title}</strong>" foi <strong>aprovada</strong> pela nossa moderação e já está ativa no portal <strong>Corrente do Bem</strong>!</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agora ela poderá ser visualizada por centenas de talentos engajados na nossa rede.</p>
+                
+                <div style="text-align: center; margin-top: 25px; margin-bottom: 25px;">
+                  <a href="https://correntedobembr.com.br/vagas" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Visualizar Vagas no Portal</a>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
+                <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
+              </div>
+            `
+          );
+        } catch (mailError: any) {
+          console.error('Erro ao enviar e-mail de aprovação de vaga:', mailError);
+        }
+      }
       
       const historyEntry = {
         action: 'Vaga Aprovada',
@@ -974,6 +1000,32 @@ export default function Dashboard() {
     if (!error && data && data.length > 0) {
       setCandidates(prev => prev.map(c => String(c.id) === String(id) ? { ...c, status: 'active' } : c));
       triggerToast('Currículo aprovado!');
+
+      const email = cand.email;
+      if (email) {
+        try {
+          await sendNotificationEmail(
+            email,
+            'Seu perfil de talento foi aprovado na Corrente do Bem! 🎉',
+            `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${cand.name}! 🎉</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu currículo para a função de "<strong>${cand.role}</strong>" foi analisado e **aprovado** pelo nosso time de moderação.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu perfil agora está visível e ativo no portal <strong>Corrente do Bem</strong> para que empresas e parceiros com propósito possam encontrar você!</p>
+                
+                <div style="text-align: center; margin-top: 25px; margin-bottom: 25px;">
+                  <a href="https://correntedobembr.com.br/talentos" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Explorar Talentos</a>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
+                <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
+              </div>
+            `
+          );
+        } catch (mailError: any) {
+          console.error('Erro ao enviar e-mail de aprovação de candidato:', mailError);
+        }
+      }
       
       const historyEntry = {
         action: 'Currículo Aprovado',
@@ -1065,6 +1117,32 @@ export default function Dashboard() {
     if (!error && data) {
       setTestimonials(prev => prev.map(t => String(t.id) === String(id) ? data : t));
       triggerToast('Depoimento aprovado!');
+
+      const email = testimonial.email;
+      if (email) {
+        try {
+          await sendNotificationEmail(
+            email,
+            'Seu depoimento foi aprovado na Corrente do Bem! 🎉',
+            `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${testimonial.name}! 🎉</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu depoimento de inspiração foi **aprovado** para exibição em nosso portal!</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agradecemos do fundo do coração por compartilhar sua história de impacto para inspirar milhares de pessoas em nossa rede da <strong>Corrente do Bem</strong>.</p>
+                
+                <div style="text-align: center; margin-top: 25px; margin-bottom: 25px;">
+                  <a href="https://correntedobembr.com.br" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Visitar o Portal</a>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
+                <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
+              </div>
+            `
+          );
+        } catch (mailError: any) {
+          console.error('Erro ao enviar e-mail de aprovação de depoimento:', mailError);
+        }
+      }
       
       const historyEntry = {
         action: 'Depoimento Aprovado',
@@ -1561,6 +1639,33 @@ export default function Dashboard() {
     if (!error && data && data.length > 0) {
       setNegocios(prev => prev.map(n => String(n.id) === String(id) ? { ...n, status: 'active' } : n));
       triggerToast('Negócio aprovado!');
+
+      const email = negocio.contact_email;
+      if (email) {
+        try {
+          await sendNotificationEmail(
+            email,
+            'Seu anúncio de negócio foi aprovado na Corrente do Bem! 🎉',
+            `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${negocio.owner_name}! 🎉</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Boa notícia! Sua proposta de negócio "<strong>${negocio.title}</strong>" foi revisada e **aprovada** pela nossa equipe.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu anúncio ou oportunidade comercial já está ativa no diretório oficial da <strong>Corrente do Bem</strong>!</p>
+                
+                <div style="text-align: center; margin-top: 25px; margin-bottom: 25px;">
+                  <a href="https://correntedobembr.com.br/negocios" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Acessar Negócios do Portal</a>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
+                <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
+              </div>
+            `
+          );
+        } catch (mailError: any) {
+          console.error('Erro ao enviar e-mail de aprovação de negócio:', mailError);
+        }
+      }
+
       const { data: hData } = await supabase.from('history').insert({
         action: 'Negócio Aprovado',
         details: `Negócio "${negocio.title}" foi aprovado.`
@@ -4792,6 +4897,7 @@ export default function Dashboard() {
                     </div>
                     {newsImageUrl && (
                       <div className="mt-3 relative aspect-video w-48 rounded-xl overflow-hidden border-2 border-primary/20 shadow-lg">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={newsImageUrl} alt="Preview" className="w-full h-full object-cover" />
                         <button 
                           type="button"
@@ -4961,6 +5067,7 @@ export default function Dashboard() {
                     </div>
                     {newsImageUrl && (
                       <div className="mt-3 relative aspect-video w-48 rounded-xl overflow-hidden border-2 border-primary/20 shadow-lg">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={newsImageUrl} alt="Preview" className="w-full h-full object-cover" />
                         <button 
                           type="button"
