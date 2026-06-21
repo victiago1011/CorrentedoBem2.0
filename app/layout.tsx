@@ -13,8 +13,11 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Corrente do Bem - Painel Administrativo',
-  description: 'Gestão de vagas e talentos',
+  title: 'Corrente do Bem - Conectando Talentos e Oportunidades',
+  description: 'A Corrente do Bem é um ecossistema completo de conexão para divulgar vagas, talentos, oportunidades de negócios e depoimentos com propósito social.',
+  icons: {
+    icon: '/icon.svg',
+  },
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

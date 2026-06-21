@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none">
+  <!-- Background: Rounded square with the exact Corrente do Bem color (#00628c) -->
+  <rect width="32" height="32" rx="8" fill="#00628c"/>
+  
+  <!-- Centered Handshake Icon (Lucide handshake path scaled to fit 32x32 view, offset to center) -->
+  <g transform="translate(4, 4)" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4-4a1 1 0 0 0-1.4-1.4L13 16"/>
+    <path d="m13 14 3-3a1 1 0 0 0-1.4-1.4L11 12"/>
+    <path d="M11 14 8 11a1 1 0 0 0-1.4 1.4L10 16"/>
+    <path d="m8 14-2-2a1 1 0 0 0-1.4 0l-4 4a1 1 0 0 0 1.4 1.4L5 15"/>
+    <path d="M5 13a3 3 0 0 0 3-3V6a2 2 0 0 0-4 0v4H3a1 1 0 0 0-1 1v2c0 .6.4 1 1 1h2Z"/>
+    <path d="M19 13a3 3 0 0 0-3-3V6a2 2 0 0 0 4 0v4h1a1 1 0 0 1 1 1v2c0 .6-.4 1-1 1h-2Z"/>
+    <path d="M10 10V5a1 1 0 0 0-2 0v5"/>
+    <path d="M14 10V5a1 1 0 0 1 2 0v5"/>
+  </g>
+</svg>
