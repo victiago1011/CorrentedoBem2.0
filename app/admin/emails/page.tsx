@@ -31,6 +31,10 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '@/lib/supabase';
+import {
+  fetchAllNewsletterSubscribers,
+  fetchNewsletterCounts,
+} from '@/lib/newsletter-utils';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -67,6 +71,11 @@ export default function EmailsAdminPage() {
 
   // Subscriber states
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [subscriberCounts, setSubscriberCounts] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [isDbReady, setIsDbReady] = useState(true);
@@ -96,7 +105,9 @@ export default function EmailsAdminPage() {
   const [campaignProgress, setCampaignProgress] = useState<{
     successCount: number;
     failureCount: number;
-    total: number;
+    totalActiveSubscribers: number;
+    totalValidEmails: number;
+    invalidEmails: string[];
   } | null>(null);
 
   // Loading indicator for list
@@ -129,23 +140,18 @@ export default function EmailsAdminPage() {
     }
   }, []);
 
-  // Fetch Subscribers list
+  // Fetch Subscribers list (paginated — bypasses Supabase 1000-row default limit)
   const fetchSubscribers = useCallback(async () => {
     setIsLoadingList(true);
     try {
-      const { data, error } = await supabase
-        .from('newsletter_subscribers')
-        .select('*')
-        .order('data_cadastro', { ascending: false });
+      const [data, counts] = await Promise.all([
+        fetchAllNewsletterSubscribers(supabase),
+        fetchNewsletterCounts(supabase),
+      ]);
 
-      if (error) {
-        // Table probably doesn't exist yet
-        setIsDbReady(false);
-        setDbErrorMessage(error.message);
-      } else {
-        setIsDbReady(true);
-        setSubscribers(data || []);
-      }
+      setIsDbReady(true);
+      setSubscribers(data as Subscriber[]);
+      setSubscriberCounts(counts);
     } catch (err: any) {
       setIsDbReady(false);
       setDbErrorMessage(err.message || 'Erro de conexão com o banco de dados');
@@ -405,7 +411,7 @@ export default function EmailsAdminPage() {
 
   // Send Core Campaign to Active Users
   const handleSendCampaign = async () => {
-    const activeCount = subscribers.filter(s => s.ativo).length;
+    const activeCount = subscriberCounts.active;
     if (activeCount === 0) {
       triggerToast('Não existem contatos ativos em sua lista para enviar.', 'error');
       return;
@@ -443,16 +449,28 @@ export default function EmailsAdminPage() {
       setCampaignProgress({
         successCount: resData.successCount,
         failureCount: resData.failureCount,
-        total: resData.total,
+        totalActiveSubscribers: resData.totalActiveSubscribers,
+        totalValidEmails: resData.totalValidEmails,
+        invalidEmails: resData.invalidEmails || [],
       });
 
-      triggerToast('Campanha concluída com sucesso!');
-      
-      // Reset composer fields on full success to prevent mistake duplicate dispatches
-      setCampaignSubject('');
-      setCampaignContent('');
-      setBtnText('');
-      setBtnLink('');
+      const hasIssues =
+        resData.failureCount > 0 || (resData.invalidEmails?.length ?? 0) > 0;
+
+      if (resData.success) {
+        triggerToast('Campanha concluída com sucesso!');
+        setCampaignSubject('');
+        setCampaignContent('');
+        setBtnText('');
+        setBtnLink('');
+      } else if (hasIssues) {
+        triggerToast(
+          `Campanha concluída com ressalvas: ${resData.successCount} enviados, ${resData.failureCount} falhas, ${resData.invalidEmails?.length ?? 0} inválidos.`,
+          'error'
+        );
+      } else {
+        triggerToast(resData.message || 'Campanha processada.', 'error');
+      }
 
       fetchSubscribers();
     } catch (err: any) {
@@ -474,10 +492,10 @@ export default function EmailsAdminPage() {
     return matchesSearch;
   });
 
-  // Stats Counters
-  const totalSubscribersCount = subscribers.length;
-  const activeSubscribersCount = subscribers.filter(s => s.ativo).length;
-  const inactiveSubscribersCount = subscribers.filter(s => !s.ativo).length;
+  // Stats Counters (totals from exact count; engagement from loaded data)
+  const totalSubscribersCount = subscriberCounts.total;
+  const activeSubscribersCount = subscriberCounts.active;
+  const inactiveSubscribersCount = subscriberCounts.inactive;
   const clickedSubscribersCount = subscribers.filter(s => s.clicou_no_mes).length;
   const totalClicksCount = subscribers.reduce((acc, curr) => acc + (curr.cliques_count || 0), 0);
 
@@ -884,15 +902,25 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
 
                 {/* Progress / Success report block */}
                 {campaignProgress && (
-                  <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div className={`p-5 border rounded-2xl ${
+                    campaignProgress.failureCount === 0 && campaignProgress.invalidEmails.length === 0
+                      ? 'bg-slate-50 border-slate-200'
+                      : 'bg-amber-50 border-amber-200'
+                  }`}>
                     <h4 className="text-sm font-extrabold text-slate-800 flex items-center gap-2 mb-2">
-                       A campanha foi enviada!
+                      {campaignProgress.failureCount === 0 && campaignProgress.invalidEmails.length === 0
+                        ? 'A campanha foi enviada!'
+                        : 'Campanha concluída com ressalvas'}
                     </h4>
-                    <p className="text-xs text-slate-500 mb-3">Progresso de entrega em tempo real:</p>
-                    <div className="grid grid-cols-3 gap-3 text-center">
+                    <p className="text-xs text-slate-500 mb-3">Resultado do disparo:</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                       <div className="bg-white p-3 rounded-xl border border-slate-100">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Total</span>
-                        <div className="text-lg font-black text-slate-800">{campaignProgress.total}</div>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Ativos</span>
+                        <div className="text-lg font-black text-slate-800">{campaignProgress.totalActiveSubscribers}</div>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-slate-100">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Válidos</span>
+                        <div className="text-lg font-black text-slate-800">{campaignProgress.totalValidEmails}</div>
                       </div>
                       <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
                         <span className="text-[10px] text-emerald-600 font-bold uppercase">Sucesso</span>
@@ -903,6 +931,18 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                         <div className="text-lg font-black text-red-700">{campaignProgress.failureCount}</div>
                       </div>
                     </div>
+                    {campaignProgress.invalidEmails.length > 0 && (
+                      <div className="mt-3 p-3 bg-amber-100/60 border border-amber-200 rounded-xl">
+                        <p className="text-xs font-bold text-amber-800 mb-1">
+                          {campaignProgress.invalidEmails.length} e-mail(s) inválido(s) ignorado(s) no envio:
+                        </p>
+                        <p className="text-[10px] font-mono text-amber-700 break-all">
+                          {campaignProgress.invalidEmails.slice(0, 10).join(', ')}
+                          {campaignProgress.invalidEmails.length > 10 &&
+                            ` … e mais ${campaignProgress.invalidEmails.length - 10}`}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 

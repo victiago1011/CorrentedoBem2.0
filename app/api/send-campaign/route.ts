@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import {
+  fetchAllNewsletterSubscribers,
+  isValidEmail,
+  normalizeEmail,
+} from '@/lib/newsletter-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -118,36 +123,59 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'E-mail de teste enviado com sucesso!' });
     }
 
-    // Case 2: Send Campaign to all Active subscribers
-    const { data: subscribers, error: dbError } = await supabase
-      .from('newsletter_subscribers')
-      .select('id, nome, email')
-      .eq('ativo', true);
+    // Case 2: Send Campaign to all Active subscribers (paginated fetch)
+    const subscribers = await fetchAllNewsletterSubscribers(supabase, {
+      activeOnly: true,
+      columns: 'id, nome, email',
+    });
 
-    if (dbError) throw dbError;
+    const totalActiveSubscribers = subscribers.length;
 
-    if (!subscribers || subscribers.length === 0) {
+    if (totalActiveSubscribers === 0) {
       return NextResponse.json(
         { error: 'Nenhum contato ativo encontrado na lista de inscritos.' },
         { status: 400 }
       );
     }
 
+    const invalidEmails: string[] = [];
+    const validSubscribers = subscribers.filter((sub) => {
+      const normalized = normalizeEmail(sub.email);
+      if (!isValidEmail(normalized)) {
+        invalidEmails.push(sub.email);
+        return false;
+      }
+      return true;
+    });
+
+    const totalValidEmails = validSubscribers.length;
+
+    if (totalValidEmails === 0) {
+      return NextResponse.json({
+        success: false,
+        successCount: 0,
+        failureCount: 0,
+        invalidEmails,
+        totalActiveSubscribers,
+        totalValidEmails: 0,
+        message: `Nenhum e-mail válido encontrado entre os ${totalActiveSubscribers} contatos ativos.`,
+      });
+    }
+
     // Process in batches of 100 (Resend limit per batch request)
     const BATCH_SIZE = 100;
-    const totalSubscribers = subscribers.length;
     let successCount = 0;
     let failureCount = 0;
 
-    for (let i = 0; i < totalSubscribers; i += BATCH_SIZE) {
-      const slice = subscribers.slice(i, i + BATCH_SIZE);
-      
-      // Build batch payloads
-      const batchPayload = slice.map(sub => {
-        const personalizedHtml = renderTemplate(sub.id, sub.nome || '', sub.email);
+    for (let i = 0; i < totalValidEmails; i += BATCH_SIZE) {
+      const slice = validSubscribers.slice(i, i + BATCH_SIZE);
+
+      const batchPayload = slice.map((sub) => {
+        const recipientEmail = normalizeEmail(sub.email);
+        const personalizedHtml = renderTemplate(sub.id, sub.nome || '', recipientEmail);
         return {
           from: 'Corrente do Bem <contato@send.correntedobembr.com.br>',
-          to: sub.email,
+          to: [recipientEmail],
           subject: subject,
           html: personalizedHtml,
         };
@@ -177,18 +205,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const fullySuccessful = failureCount === 0 && invalidEmails.length === 0;
+
     // Log the campaign action in database history
     await supabase.from('history').insert({
       action: 'Campanha de E-mail Enviada',
-      details: `Campanha "${subject}" enviada para ${successCount} destinatários ativos. Falhas: ${failureCount}.`
+      details: `Campanha "${subject}" enviada para ${successCount} destinatários válidos. Falhas no envio: ${failureCount}. Inválidos ignorados: ${invalidEmails.length}.`,
     });
 
     return NextResponse.json({
-      success: true,
+      success: fullySuccessful,
       successCount,
       failureCount,
-      total: totalSubscribers,
-      message: `Campanha processada: ${successCount} enviados com sucesso, ${failureCount} falhas.`
+      invalidEmails,
+      totalActiveSubscribers,
+      totalValidEmails,
+      message: fullySuccessful
+        ? `Campanha processada: ${successCount} enviados com sucesso.`
+        : `Campanha processada: ${successCount} enviados, ${failureCount} falhas no envio, ${invalidEmails.length} e-mails inválidos ignorados.`,
     });
 
   } catch (err: any) {
