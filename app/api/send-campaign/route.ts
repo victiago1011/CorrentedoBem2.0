@@ -5,6 +5,48 @@ import {
   isValidEmail,
   normalizeEmail,
 } from '@/lib/newsletter-utils';
+import { ensureExternalLink } from '@/lib/utils';
+
+const PUBLIC_SITE_URL = 'https://www.correntedobembr.com.br';
+
+function normalizeCampaignButtonLink(link: string): string {
+  const trimmed = link.trim();
+  if (!trimmed) return trimmed;
+
+  return ensureExternalLink(trimmed);
+}
+
+function summarizeResendError(data: unknown): string {
+  if (!data || typeof data !== 'object') {
+    return 'Resposta inválida do Resend.';
+  }
+
+  const err = data as Record<string, unknown>;
+  const parts: string[] = [];
+
+  if (typeof err.message === 'string' && err.message.trim()) {
+    parts.push(err.message.trim());
+  }
+  if (typeof err.name === 'string' && err.name.trim()) {
+    parts.push(`(${err.name})`);
+  }
+  if (Array.isArray(err.errors) && err.errors.length > 0) {
+    const nested = err.errors
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object' && 'message' in item) {
+          return String((item as { message?: unknown }).message ?? item);
+        }
+        return JSON.stringify(item);
+      })
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('; ');
+    if (nested) parts.push(nested);
+  }
+
+  return parts.length > 0 ? parts.join(' ') : 'Erro desconhecido do Resend.';
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,8 +83,8 @@ export async function POST(req: NextRequest) {
 
       let actionButtonHtml = '';
       if (primaryButtonText && primaryButtonLink) {
-        // Wrap the link with our track-click endpoint
-        const trackedLink = `${baseUrl}/api/track-click?id=${subId}&url=${encodeURIComponent(primaryButtonLink)}`;
+        const destinationLink = normalizeCampaignButtonLink(primaryButtonLink);
+        const trackedLink = `${PUBLIC_SITE_URL}/api/track-click?id=${subId}&url=${encodeURIComponent(destinationLink)}`;
         actionButtonHtml = `
           <div style="text-align: center; margin: 30px 0;">
             <a href="${trackedLink}" style="background-color: #00628c; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px rgba(0,98,140,0.2);">
@@ -117,7 +159,20 @@ export async function POST(req: NextRequest) {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || 'Erro do Resend ao enviar e-mail de teste');
+        const errorDetails = summarizeResendError(data);
+        console.error('[send-campaign] Resend test email error:', {
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+        });
+        return NextResponse.json(
+          {
+            error: 'Erro do Resend ao enviar e-mail de teste',
+            resendMessage: errorDetails,
+            errorDetails,
+          },
+          { status: res.status >= 400 && res.status < 600 ? res.status : 502 }
+        );
       }
 
       return NextResponse.json({ success: true, message: 'E-mail de teste enviado com sucesso!' });
@@ -166,6 +221,7 @@ export async function POST(req: NextRequest) {
     const BATCH_SIZE = 100;
     let successCount = 0;
     let failureCount = 0;
+    const batchErrors: string[] = [];
 
     for (let i = 0; i < totalValidEmails; i += BATCH_SIZE) {
       const slice = validSubscribers.slice(i, i + BATCH_SIZE);
@@ -196,21 +252,37 @@ export async function POST(req: NextRequest) {
         if (res.ok) {
           successCount += slice.length;
         } else {
-          console.error(`Batch send error at offset ${i}:`, data);
+          const errorDetails = summarizeResendError(data);
+          console.error('[send-campaign] Resend batch error:', {
+            offset: i,
+            batchSize: slice.length,
+            status: res.status,
+            statusText: res.statusText,
+            response: data,
+          });
+          batchErrors.push(`Lote ${Math.floor(i / BATCH_SIZE) + 1}: ${errorDetails}`);
           failureCount += slice.length;
         }
       } catch (batchErr) {
-        console.error(`Batch send network/server error at offset ${i}:`, batchErr);
+        console.error('[send-campaign] Batch send network/server error:', {
+          offset: i,
+          batchSize: slice.length,
+          error: batchErr,
+        });
+        batchErrors.push(
+          `Lote ${Math.floor(i / BATCH_SIZE) + 1}: falha de rede ou servidor ao contatar o Resend.`
+        );
         failureCount += slice.length;
       }
     }
 
     const fullySuccessful = failureCount === 0 && invalidEmails.length === 0;
+    const errorDetails = batchErrors.length > 0 ? batchErrors.slice(0, 3).join(' | ') : undefined;
 
     // Log the campaign action in database history
     await supabase.from('history').insert({
       action: 'Campanha de E-mail Enviada',
-      details: `Campanha "${subject}" enviada para ${successCount} destinatários válidos. Falhas no envio: ${failureCount}. Inválidos ignorados: ${invalidEmails.length}.`,
+      details: `Campanha "${subject}" enviada para ${successCount} destinatários válidos. Falhas no envio: ${failureCount}. Inválidos ignorados: ${invalidEmails.length}.${errorDetails ? ` Erros: ${errorDetails}` : ''}`,
     });
 
     return NextResponse.json({
@@ -220,13 +292,21 @@ export async function POST(req: NextRequest) {
       invalidEmails,
       totalActiveSubscribers,
       totalValidEmails,
+      errorDetails,
       message: fullySuccessful
         ? `Campanha processada: ${successCount} enviados com sucesso.`
         : `Campanha processada: ${successCount} enviados, ${failureCount} falhas no envio, ${invalidEmails.length} e-mails inválidos ignorados.`,
     });
 
-  } catch (err: any) {
-    console.error('Error sending campaign:', err);
-    return NextResponse.json({ error: err.message || 'Ocorreu um erro interno.' }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Ocorreu um erro interno.';
+    console.error('[send-campaign] Unexpected error:', err);
+    return NextResponse.json(
+      {
+        error: message,
+        errorDetails: message,
+      },
+      { status: 500 }
+    );
   }
 }

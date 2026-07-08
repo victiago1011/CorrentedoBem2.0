@@ -106,12 +106,15 @@ export default function EmailsAdminPage() {
   const [testEmail, setTestEmail] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [isSendingCampaign, setIsSendingCampaign] = useState(false);
+  const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
   const [campaignProgress, setCampaignProgress] = useState<{
     successCount: number;
     failureCount: number;
     totalActiveSubscribers: number;
     totalValidEmails: number;
     invalidEmails: string[];
+    hasFailures: boolean;
+    errorDetails?: string;
   } | null>(null);
 
   // Loading indicator for list
@@ -403,7 +406,12 @@ export default function EmailsAdminPage() {
 
       const resData = await response.json();
 
-      if (!response.ok) throw new Error(resData.error || 'Erro ao enviar teste');
+      if (!response.ok) {
+        const detail = resData.errorDetails || resData.resendMessage;
+        throw new Error(
+          detail ? `${resData.error || 'Erro ao enviar teste'}: ${detail}` : (resData.error || 'Erro ao enviar teste')
+        );
+      }
 
       triggerToast('E-mail de teste disparado! Verifique sua caixa de entrada.');
     } catch (err: any) {
@@ -413,8 +421,9 @@ export default function EmailsAdminPage() {
     }
   };
 
-  // Send Core Campaign to Active Users
-  const handleSendCampaign = async () => {
+  const openBulkSendConfirm = () => {
+    if (isSendingCampaign) return;
+
     const activeCount = subscriberCounts.active;
     if (activeCount === 0) {
       triggerToast('Não existem contatos ativos em sua lista para enviar.', 'error');
@@ -426,9 +435,14 @@ export default function EmailsAdminPage() {
       return;
     }
 
-    const confirmMessage = `ATENÇÃO: Você está prestes a enviar este e-mail em massa para TODOS os ${activeCount} assinantes ativos. Atuando com conformidade, deseja prosseguir?`;
-    if (!confirm(confirmMessage)) return;
+    setShowBulkConfirmModal(true);
+  };
 
+  // Send Core Campaign to Active Users (only after modal confirmation)
+  const handleSendCampaign = async () => {
+    if (isSendingCampaign) return;
+
+    setShowBulkConfirmModal(false);
     setIsSendingCampaign(true);
     setCampaignProgress(null);
 
@@ -448,36 +462,51 @@ export default function EmailsAdminPage() {
 
       const resData = await response.json();
 
-      if (!response.ok) throw new Error(resData.error || 'Falha ao enviar o e-mail');
+      if (!response.ok) {
+        const detail = resData.errorDetails || resData.resendMessage;
+        throw new Error(
+          detail ? `${resData.error || 'Falha ao enviar o e-mail'}: ${detail}` : (resData.error || 'Falha ao enviar o e-mail')
+        );
+      }
+
+      const failureCount = resData.failureCount ?? 0;
+      const invalidCount = resData.invalidEmails?.length ?? 0;
+      const hasFailures = failureCount > 0 || invalidCount > 0 || !resData.success;
 
       setCampaignProgress({
-        successCount: resData.successCount,
-        failureCount: resData.failureCount,
-        totalActiveSubscribers: resData.totalActiveSubscribers,
-        totalValidEmails: resData.totalValidEmails,
+        successCount: resData.successCount ?? 0,
+        failureCount,
+        totalActiveSubscribers: resData.totalActiveSubscribers ?? subscriberCounts.active,
+        totalValidEmails: resData.totalValidEmails ?? 0,
         invalidEmails: resData.invalidEmails || [],
+        hasFailures,
+        errorDetails: resData.errorDetails || resData.message,
       });
 
-      const hasIssues =
-        resData.failureCount > 0 || (resData.invalidEmails?.length ?? 0) > 0;
-
-      if (resData.success) {
+      if (resData.success && !hasFailures) {
         triggerToast('E-mail enviado com sucesso!');
         setCampaignSubject('');
         setCampaignContent('');
         setBtnText('');
         setBtnLink('');
-      } else if (hasIssues) {
+      } else if (hasFailures) {
         triggerToast(
-          `Envio concluído com ressalvas: ${resData.successCount} enviados, ${resData.failureCount} falhas, ${resData.invalidEmails?.length ?? 0} inválidos.`,
+          `Envio com falhas: ${resData.successCount ?? 0} enviados, ${failureCount} com falha.`,
           'error'
         );
-      } else {
-        triggerToast(resData.message || 'Envio processado.', 'error');
       }
 
       fetchSubscribers();
     } catch (err: any) {
+      setCampaignProgress({
+        successCount: 0,
+        failureCount: subscriberCounts.active,
+        totalActiveSubscribers: subscriberCounts.active,
+        totalValidEmails: 0,
+        invalidEmails: [],
+        hasFailures: true,
+        errorDetails: err.message,
+      });
       triggerToast(`Erro ao enviar: ${err.message}`, 'error');
     } finally {
       setIsSendingCampaign(false);
@@ -994,38 +1023,109 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                   </button>
                 </div>
               </div>
+            </div>
 
-              {/* Resultado do envio */}
-              {campaignProgress && (
-                <div className={`px-6 py-5 border-b ${
-                  campaignProgress.failureCount === 0 && campaignProgress.invalidEmails.length === 0
-                    ? 'bg-emerald-50/50 border-emerald-100'
-                    : 'bg-amber-50/50 border-amber-100'
-                }`}>
-                  <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                    {campaignProgress.failureCount === 0 && campaignProgress.invalidEmails.length === 0
-                      ? 'E-mail enviado com sucesso!'
-                      : 'Envio concluído com ressalvas'}
-                  </h4>
-                  <p className="text-xs text-slate-500 mb-3">Resultado do envio:</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-                    <div className="bg-white p-3 rounded-xl border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase">Ativos</span>
-                      <div className="text-lg font-black text-slate-800">{campaignProgress.totalActiveSubscribers}</div>
+            {/* Seção de envio em massa — separada e destacada como ação de produção */}
+            <div className="bg-white rounded-2xl border-2 border-red-300/80 shadow-sm overflow-hidden">
+              <div className="px-6 py-5 bg-red-50 border-b border-red-200/70">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="bg-red-100 p-1.5 rounded-lg">
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                  </div>
+                  <h3 className="text-sm font-bold text-red-900">Envio em massa — produção</h3>
+                </div>
+                <p className="text-xs text-red-800/90 ml-8">
+                  Esta ação envia o e-mail para <strong>todos os contatos ativos</strong>. Não pode ser desfeita.
+                </p>
+              </div>
+              <div className="px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-red-600" />
+                    {activeSubscribersCount} contatos ativos receberão este e-mail
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    O e-mail inclui rodapé padrão e link de descadastro.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openBulkSendConfirm}
+                  disabled={isSendingCampaign || activeSubscribersCount === 0}
+                  className="flex items-center justify-center gap-2 px-8 py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold text-sm rounded-xl transition shadow-lg shadow-red-600/20 w-full md:w-auto min-w-[240px]"
+                >
+                  {isSendingCampaign ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Enviar para todos os contatos
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Resultado do envio em massa */}
+            {campaignProgress && (
+              <div className={`rounded-2xl border-2 shadow-sm overflow-hidden ${
+                campaignProgress.hasFailures
+                  ? 'bg-red-50/80 border-red-300'
+                  : 'bg-emerald-50/50 border-emerald-200'
+              }`}>
+                <div className="px-6 py-5">
+                  <div className="flex items-start gap-3 mb-3">
+                    {campaignProgress.hasFailures ? (
+                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <h4 className={`text-sm font-extrabold mb-1 ${
+                        campaignProgress.hasFailures ? 'text-red-800' : 'text-emerald-800'
+                      }`}>
+                        {campaignProgress.hasFailures
+                          ? 'Envio concluído com falhas'
+                          : 'E-mail enviado com sucesso!'}
+                      </h4>
+                      <p className={`text-xs ${campaignProgress.hasFailures ? 'text-red-700' : 'text-slate-500'}`}>
+                        Resultado do envio em massa:
+                      </p>
                     </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase">Válidos</span>
-                      <div className="text-lg font-black text-slate-800">{campaignProgress.totalValidEmails}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-center max-w-md">
+                    <div className={`p-3 rounded-xl border ${
+                      campaignProgress.hasFailures
+                        ? 'bg-white border-red-100'
+                        : 'bg-emerald-50 border-emerald-100'
+                    }`}>
+                      <span className={`text-[10px] font-bold uppercase ${
+                        campaignProgress.hasFailures ? 'text-slate-500' : 'text-emerald-600'
+                      }`}>Enviados</span>
+                      <div className={`text-lg font-black ${
+                        campaignProgress.hasFailures ? 'text-slate-800' : 'text-emerald-700'
+                      }`}>{campaignProgress.successCount}</div>
                     </div>
-                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                      <span className="text-[10px] text-emerald-600 font-bold uppercase">Sucesso</span>
-                      <div className="text-lg font-black text-emerald-700">{campaignProgress.successCount}</div>
-                    </div>
-                    <div className="bg-red-50 p-3 rounded-xl border border-red-100">
-                      <span className="text-[10px] text-red-500 uppercase font-bold">Falhas</span>
+                    <div className="bg-red-50 p-3 rounded-xl border border-red-200">
+                      <span className="text-[10px] text-red-600 uppercase font-bold">Com falha</span>
                       <div className="text-lg font-black text-red-700">{campaignProgress.failureCount}</div>
                     </div>
                   </div>
+                  {campaignProgress.hasFailures && (
+                    <div className="mt-4 p-3 bg-red-100/70 border border-red-200 rounded-xl">
+                      <p className="text-xs font-bold text-red-800 mb-1">
+                        Verifique os logs do servidor e o painel do Resend para identificar a causa das falhas.
+                      </p>
+                      {campaignProgress.errorDetails && (
+                        <p className="text-[11px] text-red-700 font-medium">
+                          Detalhe: {campaignProgress.errorDetails}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {campaignProgress.invalidEmails.length > 0 && (
                     <div className="mt-3 p-3 bg-amber-100/60 border border-amber-200 rounded-xl">
                       <p className="text-xs font-bold text-amber-800 mb-1">
@@ -1039,38 +1139,8 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                     </div>
                   )}
                 </div>
-              )}
-
-              {/* Barra de envio principal */}
-              <div className="px-6 py-5 bg-slate-50 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
-                    <Users className="w-4 h-4 text-[#00628c]" />
-                    Será enviado para {activeSubscribersCount} contatos ativos
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    O e-mail inclui rodapé padrão e link de descadastro.
-                  </p>
-                </div>
-                <button
-                  onClick={handleSendCampaign}
-                  disabled={isSendingCampaign || activeSubscribersCount === 0}
-                  className="flex items-center justify-center gap-2 px-8 py-3.5 bg-[#00628c] hover:bg-[#004e70] disabled:bg-slate-300 text-white font-extrabold text-sm rounded-xl transition shadow-lg shadow-[#00628c]/20 w-full md:w-auto min-w-[200px]"
-                >
-                  {isSendingCampaign ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Enviar para {activeSubscribersCount} contatos
-                    </>
-                  )}
-                </button>
               </div>
-            </div>
+            )}
 
             {/* Boas práticas — compacto abaixo */}
             <div className="bg-slate-900 text-slate-200 rounded-2xl p-5 shadow-lg relative overflow-hidden">
@@ -1360,6 +1430,57 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                 </button>
               </div>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* BULK SEND CONFIRMATION MODAL */}
+      {showBulkConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white max-w-md w-full rounded-2xl shadow-2xl p-6 border-2 border-red-200"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-red-100 p-2.5 rounded-full">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-800">
+                Confirmar envio em massa
+              </h3>
+            </div>
+
+            <p className="text-sm text-slate-700 leading-relaxed mb-6">
+              Você tem certeza que deseja enviar este e-mail para{' '}
+              <strong className="text-red-700">{activeSubscribersCount} contatos ativos</strong>?
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowBulkConfirmModal(false)}
+                disabled={isSendingCampaign}
+                className="px-5 py-2.5 text-sm bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold rounded-xl transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSendCampaign}
+                disabled={isSendingCampaign}
+                className="px-5 py-2.5 text-sm bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition flex items-center gap-2"
+              >
+                {isSendingCampaign ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Confirmar envio'
+                )}
+              </button>
+            </div>
           </motion.div>
         </div>
       )}
