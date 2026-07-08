@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 import 'react-quill-new/dist/quill.snow.css';
 
 import {
   ChevronLeft,
+  ChevronRight,
   Mail,
+  Send,
   User,
   Users,
   Search,
@@ -17,7 +19,6 @@ import {
   Check,
   XCircle,
   HelpCircle,
-  Play,
   RotateCcw,
   Sparkles,
   ExternalLink,
@@ -56,6 +57,8 @@ interface SiteAnalyticsRow {
   unique_visitors_count?: number;
 }
 
+const CONTACTS_PER_PAGE = 25;
+
 export default function EmailsAdminPage() {
   const router = useRouter();
 
@@ -78,6 +81,7 @@ export default function EmailsAdminPage() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isDbReady, setIsDbReady] = useState(true);
   const [dbErrorMessage, setDbErrorMessage] = useState('');
 
@@ -418,7 +422,7 @@ export default function EmailsAdminPage() {
     }
 
     if (!campaignSubject.trim() || !campaignContent.trim()) {
-      triggerToast('Assunto e Conteúdo são obrigatórios para lançar a campanha.', 'error');
+      triggerToast('Preencha o assunto e o conteúdo antes de enviar.', 'error');
       return;
     }
 
@@ -444,7 +448,7 @@ export default function EmailsAdminPage() {
 
       const resData = await response.json();
 
-      if (!response.ok) throw new Error(resData.error || 'Falha ao processar campanha');
+      if (!response.ok) throw new Error(resData.error || 'Falha ao enviar o e-mail');
 
       setCampaignProgress({
         successCount: resData.successCount,
@@ -458,39 +462,61 @@ export default function EmailsAdminPage() {
         resData.failureCount > 0 || (resData.invalidEmails?.length ?? 0) > 0;
 
       if (resData.success) {
-        triggerToast('Campanha concluída com sucesso!');
+        triggerToast('E-mail enviado com sucesso!');
         setCampaignSubject('');
         setCampaignContent('');
         setBtnText('');
         setBtnLink('');
       } else if (hasIssues) {
         triggerToast(
-          `Campanha concluída com ressalvas: ${resData.successCount} enviados, ${resData.failureCount} falhas, ${resData.invalidEmails?.length ?? 0} inválidos.`,
+          `Envio concluído com ressalvas: ${resData.successCount} enviados, ${resData.failureCount} falhas, ${resData.invalidEmails?.length ?? 0} inválidos.`,
           'error'
         );
       } else {
-        triggerToast(resData.message || 'Campanha processada.', 'error');
+        triggerToast(resData.message || 'Envio processado.', 'error');
       }
 
       fetchSubscribers();
     } catch (err: any) {
-      triggerToast(`Erro na campanha: ${err.message}`, 'error');
+      triggerToast(`Erro ao enviar: ${err.message}`, 'error');
     } finally {
       setIsSendingCampaign(false);
     }
   };
 
-  // Filter & Search computation
-  const filteredSubscribers = subscribers.filter((sub) => {
-    const matchesSearch = 
-      sub.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (sub.nome && sub.nome.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    if (filterStatus === 'all') return matchesSearch;
-    if (filterStatus === 'active') return matchesSearch && sub.ativo;
-    if (filterStatus === 'inactive') return matchesSearch && !sub.ativo;
-    return matchesSearch;
-  });
+  // Filter, sort and paginate subscribers (client-side)
+  const sortedFilteredSubscribers = useMemo(() => {
+    const filtered = subscribers.filter((sub) => {
+      const matchesSearch =
+        sub.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (sub.nome && sub.nome.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      if (filterStatus === 'all') return matchesSearch;
+      if (filterStatus === 'active') return matchesSearch && sub.ativo;
+      if (filterStatus === 'inactive') return matchesSearch && !sub.ativo;
+      return matchesSearch;
+    });
+
+    return [...filtered].sort((a, b) => {
+      const sortKeyA = (a.nome?.trim() || a.email).toLowerCase();
+      const sortKeyB = (b.nome?.trim() || b.email).toLowerCase();
+      return sortKeyA.localeCompare(sortKeyB, 'pt-BR');
+    });
+  }, [subscribers, searchQuery, filterStatus]);
+
+  const totalFilteredCount = sortedFilteredSubscribers.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / CONTACTS_PER_PAGE));
+  const effectivePage = Math.min(currentPage, totalPages);
+  const paginatedSubscribers = sortedFilteredSubscribers.slice(
+    (effectivePage - 1) * CONTACTS_PER_PAGE,
+    effectivePage * CONTACTS_PER_PAGE
+  );
+  const rangeStart = totalFilteredCount === 0 ? 0 : (effectivePage - 1) * CONTACTS_PER_PAGE + 1;
+  const rangeEnd = Math.min(effectivePage * CONTACTS_PER_PAGE, totalFilteredCount);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStatus]);
 
   // Stats Counters (totals from exact count; engagement from loaded data)
   const totalSubscribersCount = subscriberCounts.total;
@@ -570,8 +596,8 @@ export default function EmailsAdminPage() {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Play className="w-4 h-4" />
-              Lançar Campanha
+              <Send className="w-4 h-4" />
+              Novo E-mail
             </button>
             <button
               onClick={() => setActiveTab('stats')}
@@ -748,14 +774,14 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                           Carregando lista de contatos...
                         </td>
                       </tr>
-                    ) : filteredSubscribers.length === 0 ? (
+                    ) : sortedFilteredSubscribers.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
                           Nenhum contato encontrado com os critérios de busca atuais.
                         </td>
                       </tr>
                     ) : (
-                      filteredSubscribers.map((sub) => (
+                      paginatedSubscribers.map((sub) => (
                         <tr key={sub.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition">
                           <td className="px-6 py-4">
                             <div className="font-bold text-slate-800 text-sm">
@@ -818,231 +844,258 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination */}
+              {!isLoadingList && totalFilteredCount > 0 && (
+                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <p className="text-sm text-slate-500 font-medium">
+                    Mostrando <span className="font-bold text-slate-700">{rangeStart}–{rangeEnd}</span> de{' '}
+                    <span className="font-bold text-slate-700">{totalFilteredCount}</span> contatos
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                      disabled={effectivePage === 1}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-[#00628c] transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Anterior
+                    </button>
+                    <span className="text-xs text-slate-400 font-medium px-2">
+                      Página {effectivePage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                      disabled={effectivePage === totalPages}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-[#00628c] transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Próxima
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* TAB 2: Lanzar Campanha Email mass dispatcher */}
+        {/* TAB 2: Novo E-mail — composição estilo cliente de e-mail */}
         {activeTab === 'campaign' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
-            {/* Form Composer Card */}
-            <div className="space-y-6 lg:col-span-8">
-              <div className="bg-white rounded-3xl border border-slate-200/50 p-6 shadow-sm space-y-6">
-                <div>
-                  <h2 className="text-lg font-extrabold text-slate-800">Nova Campanha de E-mail</h2>
-                  <p className="text-xs text-slate-500 mt-1">Insira e customize as informações do conteúdo que decolará aos destinatários ativos.</p>
-                </div>
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
 
-                <div className="space-y-4">
-                  {/* Subject */}
+              {/* Cabeçalho */}
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/40">
+                <h2 className="text-base font-extrabold text-slate-800">Escrever novo e-mail</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Escreva o assunto e a mensagem que será enviada aos contatos ativos.
+                </p>
+              </div>
+
+              {/* Assunto — linha única estilo Gmail */}
+              <div className="flex items-center gap-4 px-6 py-3 border-b border-slate-100">
+                <span className="text-xs font-semibold text-slate-400 shrink-0 w-16">Assunto</span>
+                <input
+                  type="text"
+                  placeholder="Ex: Novidades do mês da Corrente do Bem"
+                  value={campaignSubject}
+                  onChange={(e) => setCampaignSubject(e.target.value)}
+                  className="flex-1 border-0 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-0"
+                />
+              </div>
+
+              {/* Corpo do e-mail */}
+              <div className="border-b border-slate-100">
+                <div className="[&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-slate-100 [&_.ql-container]:border-0 [&_.ql-editor]:min-h-[300px] [&_.ql-editor]:text-sm">
+                  <ReactQuill
+                    theme="snow"
+                    value={campaignContent}
+                    onChange={setCampaignContent}
+                    placeholder="Escreva sua mensagem aqui... Dica: use {{nome}} para personalizar com o nome de cada contato."
+                    modules={{
+                      toolbar: [
+                        [{ header: [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ list: 'ordered' }, { list: 'bullet' }],
+                        ['link', 'clean'],
+                      ],
+                    }}
+                    className="bg-white"
+                  />
+                </div>
+                <p className="px-6 py-2 text-[10px] text-slate-400 border-t border-slate-50">
+                  Use <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-600">{'{{nome}}'}</code> para inserir o nome de cada contato automaticamente.
+                </p>
+              </div>
+
+              {/* Botão opcional */}
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/30">
+                <p className="text-xs font-semibold text-slate-600 mb-3">Botão no e-mail (opcional)</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-widest mb-1.5">Assunto do E-mail *</label>
+                    <label className="block text-[10px] text-slate-500 font-medium mb-1">Texto do botão</label>
                     <input
                       type="text"
-                      placeholder="Ex: Confirmação de Novidades do Mês da Corrente do Bem!"
-                      value={campaignSubject}
-                      onChange={(e) => setCampaignSubject(e.target.value)}
-                      className="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-[#00628c]/20 outline-none transition"
+                      placeholder="Ex: Acessar portal de vagas"
+                      value={btnText}
+                      onChange={(e) => setBtnText(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#00628c]/20 outline-none transition"
                     />
                   </div>
-
-                  {/* HTML Content Rich Composer */}
                   <div>
-                    <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-widest mb-1.5">Corpo do E-mail (Mensagem) *</label>
-                    <div className="bg-slate-50/70 rounded-2xl overflow-hidden border border-slate-200">
-                      <ReactQuill
-                        theme="snow"
-                        value={campaignContent}
-                        onChange={setCampaignContent}
-                        placeholder="Monte sua campanha de forma incrível aqui... Dica: use {{nome}} para referenciar o nome do assinante automaticamente!"
-                        modules={{
-                          toolbar: [
-                            [{ 'header': [1, 2, 3, false] }],
-                            ['bold', 'italic', 'underline', 'strike'],
-                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                            ['link', 'clean']
-                          ]
-                        }}
-                        className="bg-white"
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 italic font-medium">Use <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-600">{"{{nome}}"}</code> para inserir o nome correspondente de cada pessoa de forma personalizada no texto do e-mail.</p>
-                  </div>
-
-                  {/* Botão de Destaque CTA options (Automatic click tracked button) */}
-                  <div className="p-5 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-4">
-                    <p className="text-xs font-extrabold text-slate-700 uppercase tracking-widest">Botão Principal de Destaque (Opcional - Cliques Monitorados)</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] text-slate-500 font-bold uppercase mb-1">Texto do Botão</label>
-                        <input
-                          type="text"
-                          placeholder="Ex: Acessar Portal de Vagas"
-                          value={btnText}
-                          onChange={(e) => setBtnText(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-[#00628c]/20 outline-none transition"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 font-bold uppercase mb-1">Link de Destino</label>
-                        <input
-                          type="text"
-                          placeholder="Ex: https://correntedobembr.com.br/vagas"
-                          value={btnLink}
-                          onChange={(e) => setBtnLink(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-[#00628c]/20 outline-none transition"
-                        />
-                      </div>
-                    </div>
+                    <label className="block text-[10px] text-slate-500 font-medium mb-1">Link de destino</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: https://correntedobembr.com.br/vagas"
+                      value={btnLink}
+                      onChange={(e) => setBtnLink(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#00628c]/20 outline-none transition"
+                    />
                   </div>
                 </div>
+                <p className="text-[10px] text-slate-400 mt-2">Os cliques neste botão são rastreados automaticamente.</p>
+              </div>
 
-                <hr className="border-slate-100" />
-
-                {/* Progress / Success report block */}
-                {campaignProgress && (
-                  <div className={`p-5 border rounded-2xl ${
-                    campaignProgress.failureCount === 0 && campaignProgress.invalidEmails.length === 0
-                      ? 'bg-slate-50 border-slate-200'
-                      : 'bg-amber-50 border-amber-200'
-                  }`}>
-                    <h4 className="text-sm font-extrabold text-slate-800 flex items-center gap-2 mb-2">
-                      {campaignProgress.failureCount === 0 && campaignProgress.invalidEmails.length === 0
-                        ? 'A campanha foi enviada!'
-                        : 'Campanha concluída com ressalvas'}
-                    </h4>
-                    <p className="text-xs text-slate-500 mb-3">Resultado do disparo:</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-                      <div className="bg-white p-3 rounded-xl border border-slate-100">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Ativos</span>
-                        <div className="text-lg font-black text-slate-800">{campaignProgress.totalActiveSubscribers}</div>
-                      </div>
-                      <div className="bg-white p-3 rounded-xl border border-slate-100">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Válidos</span>
-                        <div className="text-lg font-black text-slate-800">{campaignProgress.totalValidEmails}</div>
-                      </div>
-                      <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                        <span className="text-[10px] text-emerald-600 font-bold uppercase">Sucesso</span>
-                        <div className="text-lg font-black text-emerald-700">{campaignProgress.successCount}</div>
-                      </div>
-                      <div className="bg-red-50 p-3 rounded-xl border border-red-100">
-                        <span className="text-[10px] text-red-500 uppercase font-bold">Falhas</span>
-                        <div className="text-lg font-black text-red-700">{campaignProgress.failureCount}</div>
-                      </div>
-                    </div>
-                    {campaignProgress.invalidEmails.length > 0 && (
-                      <div className="mt-3 p-3 bg-amber-100/60 border border-amber-200 rounded-xl">
-                        <p className="text-xs font-bold text-amber-800 mb-1">
-                          {campaignProgress.invalidEmails.length} e-mail(s) inválido(s) ignorado(s) no envio:
-                        </p>
-                        <p className="text-[10px] font-mono text-amber-700 break-all">
-                          {campaignProgress.invalidEmails.slice(0, 10).join(', ')}
-                          {campaignProgress.invalidEmails.length > 10 &&
-                            ` … e mais ${campaignProgress.invalidEmails.length - 10}`}
-                        </p>
-                      </div>
-                    )}
+              {/* Painel de teste */}
+              <div className="px-6 py-5 bg-amber-50 border-b border-amber-200/70">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="bg-amber-100 p-1.5 rounded-lg">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
                   </div>
-                )}
-
-                {/* Dispatch Controls */}
-                <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/50 flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="text-left">
-                    <p className="text-sm font-extrabold text-[#00628c] flex items-center gap-1.5">
-                      <Users className="w-4 h-4" />
-                      Remetentes Ativos: {activeSubscribersCount} contatos
-                    </p>
-                    <p className="text-[11px] text-slate-400 font-medium mt-1">Sua mensagem será personalizada com o rodapé padrão e o link de descadastro obrigatório.</p>
-                  </div>
-
+                  <h3 className="text-sm font-bold text-amber-900">Enviar e-mail de teste</h3>
+                </div>
+                <p className="text-xs text-amber-800/80 mb-4 ml-8">
+                  Envie uma cópia para seu e-mail antes de enviar para todos.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 ml-0 sm:ml-8">
+                  <input
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={testEmail}
+                    onChange={(e) => setTestEmail(e.target.value)}
+                    className="flex-1 bg-white border border-amber-200/80 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 transition"
+                  />
                   <button
-                    onClick={handleSendCampaign}
-                    disabled={isSendingCampaign || activeSubscribersCount === 0}
-                    className="flex items-center justify-center gap-2 px-6 py-3 bg-[#00628c] hover:bg-[#004e70] disabled:bg-slate-300 text-white font-extrabold text-sm rounded-xl transition shadow-lg shadow-[#00628c]/15 w-full md:w-auto"
+                    onClick={handleSendTest}
+                    disabled={isSendingTest}
+                    className="shrink-0 flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white font-bold text-sm rounded-lg shadow-sm transition"
                   >
-                    {isSendingCampaign ? (
+                    {isSendingTest ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Disparando E-mails...
+                        Enviando...
                       </>
                     ) : (
                       <>
-                        <Play className="w-4 h-4" />
-                        Disparar para {activeSubscribersCount} Contatos
+                        <Send className="w-4 h-4" />
+                        Enviar teste
                       </>
                     )}
                   </button>
                 </div>
               </div>
-            </div>
 
-            {/* Campaign Sidebar Rules & Tool Testing */}
-            <div className="lg:col-span-4 space-y-6">
-              
-              {/* Test Campaign Dispatch segment */}
-              <div className="bg-white rounded-3xl border border-slate-200/50 p-6 shadow-sm space-y-4">
-                <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
-                  <Sparkles className="text-amber-500 w-4 h-4" />
-                  Módulo de Homologação / Teste
-                </h3>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Altamente recomendado testar o layout de sua autoria e receber o e-mail em sua própria caixa de entrada pessoal antes do disparo massivo.
-                </p>
+              {/* Resultado do envio */}
+              {campaignProgress && (
+                <div className={`px-6 py-5 border-b ${
+                  campaignProgress.failureCount === 0 && campaignProgress.invalidEmails.length === 0
+                    ? 'bg-emerald-50/50 border-emerald-100'
+                    : 'bg-amber-50/50 border-amber-100'
+                }`}>
+                  <h4 className="text-sm font-extrabold text-slate-800 mb-1">
+                    {campaignProgress.failureCount === 0 && campaignProgress.invalidEmails.length === 0
+                      ? 'E-mail enviado com sucesso!'
+                      : 'Envio concluído com ressalvas'}
+                  </h4>
+                  <p className="text-xs text-slate-500 mb-3">Resultado do envio:</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                    <div className="bg-white p-3 rounded-xl border border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Ativos</span>
+                      <div className="text-lg font-black text-slate-800">{campaignProgress.totalActiveSubscribers}</div>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Válidos</span>
+                      <div className="text-lg font-black text-slate-800">{campaignProgress.totalValidEmails}</div>
+                    </div>
+                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                      <span className="text-[10px] text-emerald-600 font-bold uppercase">Sucesso</span>
+                      <div className="text-lg font-black text-emerald-700">{campaignProgress.successCount}</div>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-xl border border-red-100">
+                      <span className="text-[10px] text-red-500 uppercase font-bold">Falhas</span>
+                      <div className="text-lg font-black text-red-700">{campaignProgress.failureCount}</div>
+                    </div>
+                  </div>
+                  {campaignProgress.invalidEmails.length > 0 && (
+                    <div className="mt-3 p-3 bg-amber-100/60 border border-amber-200 rounded-xl">
+                      <p className="text-xs font-bold text-amber-800 mb-1">
+                        {campaignProgress.invalidEmails.length} e-mail(s) inválido(s) ignorado(s) no envio:
+                      </p>
+                      <p className="text-[10px] font-mono text-amber-700 break-all">
+                        {campaignProgress.invalidEmails.slice(0, 10).join(', ')}
+                        {campaignProgress.invalidEmails.length > 10 &&
+                          ` … e mais ${campaignProgress.invalidEmails.length - 10}`}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Barra de envio principal */}
+              <div className="px-6 py-5 bg-slate-50 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div>
-                  <label className="block text-[10px] text-slate-500 font-bold uppercase mb-1">Seu E-mail para Teste</label>
-                  <input
-                    type="email"
-                    placeholder="Ex: robinho@correntedobembr.com.br"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                    className="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:bg-white transition"
-                  />
+                  <p className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-[#00628c]" />
+                    Será enviado para {activeSubscribersCount} contatos ativos
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    O e-mail inclui rodapé padrão e link de descadastro.
+                  </p>
                 </div>
                 <button
-                  onClick={handleSendTest}
-                  disabled={isSendingTest}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-800 hover:bg-slate-900 border border-slate-900 text-white font-bold text-xs rounded-xl shadow-md transition"
+                  onClick={handleSendCampaign}
+                  disabled={isSendingCampaign || activeSubscribersCount === 0}
+                  className="flex items-center justify-center gap-2 px-8 py-3.5 bg-[#00628c] hover:bg-[#004e70] disabled:bg-slate-300 text-white font-extrabold text-sm rounded-xl transition shadow-lg shadow-[#00628c]/20 w-full md:w-auto min-w-[200px]"
                 >
-                  {isSendingTest ? (
+                  {isSendingCampaign ? (
                     <>
-                      <Loader2 className="w-4.5 h-4.5 animate-spin" />
-                      Enviando Teste...
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enviando...
                     </>
                   ) : (
-                    'Enviar Meu E-mail de Teste'
+                    <>
+                      <Send className="w-4 h-4" />
+                      Enviar para {activeSubscribersCount} contatos
+                    </>
                   )}
                 </button>
               </div>
+            </div>
 
-              {/* Directives Rules Banner */}
-              <div className="bg-slate-900 text-slate-200 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl" />
-                <h3 className="text-sm font-extrabold text-white mb-2 flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-sky-400" />
-                  Boas Práticas de Envio
-                </h3>
-                <ul className="text-[11px] text-slate-300 space-y-3 font-medium leading-relaxed">
-                  <li className="flex gap-2">
-                    <span className="text-emerald-400 font-extrabold">✓</span>
-                    <div>
-                      <strong className="text-white">Rastreamento Automatizado:</strong> Todos os cliques são rastreados de forma nativa e segura se você usar o Botão de Destaque.
-                    </div>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-emerald-400 font-extrabold">✓</span>
-                    <div>
-                      <strong className="text-white">Opção de Descadastro:</strong> Por conformidade legal de e-mail marketing, o rodapé incluirá obrigatoriamente a opção de cancelamento de inscrição instantâneo.
-                    </div>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-sky-400 font-extrabold">i</span>
-                    <div>
-                      <strong className="text-white">Remetente Verificado:</strong> Suas mensagens estão decolando do seu domínio homologado <code className="bg-slate-800 text-sky-300 px-1 py-0.5 rounded">contato@send.correntedobembr.com.br</code> garantindo máxima taxa de entrega legítima.
-                    </div>
-                  </li>
-                </ul>
-              </div>
+            {/* Boas práticas — compacto abaixo */}
+            <div className="bg-slate-900 text-slate-200 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/10 rounded-full blur-2xl" />
+              <h3 className="text-sm font-extrabold text-white mb-3 flex items-center gap-2">
+                <Lock className="w-4 h-4 text-sky-400" />
+                Boas práticas de envio
+              </h3>
+              <ul className="text-[11px] text-slate-300 space-y-2.5 font-medium leading-relaxed">
+                <li className="flex gap-2">
+                  <span className="text-emerald-400 font-extrabold shrink-0">✓</span>
+                  <span><strong className="text-white">Cliques rastreados:</strong> use o botão opcional para acompanhar quem clicou.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-emerald-400 font-extrabold shrink-0">✓</span>
+                  <span><strong className="text-white">Descadastro automático:</strong> todo e-mail inclui link para cancelar a inscrição.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-sky-400 font-extrabold shrink-0">i</span>
+                  <span>
+                    <strong className="text-white">Remetente verificado:</strong>{' '}
+                    <code className="bg-slate-800 text-sky-300 px-1 py-0.5 rounded text-[10px]">contato@send.correntedobembr.com.br</code>
+                  </span>
+                </li>
+              </ul>
             </div>
           </div>
         )}
