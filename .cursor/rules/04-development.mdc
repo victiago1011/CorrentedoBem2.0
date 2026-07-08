@@ -1,3 +1,75 @@
 ---
+description: Boas práticas de desenvolvimento do projeto
 alwaysApply: true
 ---
+
+# Desenvolvimento
+
+Antes de implementar qualquer funcionalidade:
+
+- Consulte a documentação relevante.
+- Respeite a arquitetura existente.
+- Faça apenas a alteração solicitada.
+
+## Alterações
+
+Cada tarefa deve possuir um único objetivo.
+
+Evite:
+
+- alterar arquivos não relacionados;
+- realizar refatorações desnecessárias;
+- misturar correções com novas funcionalidades.
+
+## Código
+
+Priorize código:
+
+- simples;
+- legível;
+- reutilizável;
+- consistente com o restante do projeto.
+
+Evite soluções excessivamente complexas.
+
+## Nomes
+
+Utilize nomes claros e consistentes para:
+
+- componentes;
+- funções;
+- variáveis;
+- arquivos;
+- interfaces.
+
+## Componentes
+
+Sempre verificar se já existe um componente semelhante antes de criar um novo.
+
+## Testes
+
+Após implementar uma alteração:
+
+- verificar erros de compilação;
+- verificar erros de TypeScript;
+- verificar erros de lint, quando aplicável;
+- confirmar que nenhuma funcionalidade existente foi quebrada.
+
+## Commits
+
+Nunca realizar commits automaticamente.
+
+Nunca criar branches automaticamente.
+
+Nunca executar push sem solicitação explícita do usuário.
+
+## Comunicação
+
+Ao finalizar uma implementação, informe:
+
+- quais arquivos foram alterados;
+- o motivo de cada alteração;
+- possíveis impactos;
+- como validar a funcionalidade.
+
+Caso exista qualquer incerteza durante a implementação, interrompa o trabalho e peça esclarecimentos ao usuário.

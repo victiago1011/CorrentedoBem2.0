@@ -1,3 +1,67 @@
 ---
+description: Segurança e áreas críticas do projeto
 alwaysApply: true
 ---
+
+# Segurança
+
+Antes de alterar qualquer área sensível, consulte obrigatoriamente:
+
+- docs/09_SECURITY.md
+- docs/04_DATABASE.md
+- docs/05_ENVIRONMENT.md
+- docs/08_INTEGRATIONS.md
+- docs/10_CONSTITUTION.md
+
+## Áreas críticas
+
+Nunca alterar sem aprovação explícita:
+
+- autenticação;
+- Supabase Auth;
+- tabelas do Supabase;
+- políticas RLS;
+- variáveis de ambiente;
+- arquivos `.env`;
+- Resend;
+- Zoho;
+- Cloudflare;
+- Registro.br;
+- Vercel;
+- rotas de API;
+- deploy;
+- DNS.
+
+## Segredos
+
+Nunca expor, criar, imprimir ou salvar em arquivos:
+
+- API keys;
+- tokens;
+- senhas;
+- service role keys;
+- credenciais;
+- valores reais de `.env.local`.
+
+## API Routes
+
+Antes de alterar qualquer rota em `app/api/`, avaliar:
+
+- impacto em segurança;
+- autenticação;
+- banco de dados;
+- envio de e-mails;
+- risco de abuso;
+- necessidade de logs ou histórico.
+
+## Banco de Dados
+
+Nunca criar, remover ou alterar tabelas, colunas, permissões ou políticas sem plano aprovado.
+
+## E-mails
+
+Nunca alterar remetentes, domínios de envio, campanhas ou chaves do Resend sem aprovação.
+
+## Em caso de dúvida
+
+Pare a tarefa e pergunte ao usuário antes de continuar.

@@ -1,3 +1,68 @@
 ---
+description: Respeitar a arquitetura existente do projeto
 alwaysApply: true
 ---
+
+# Arquitetura
+
+Antes de criar qualquer arquivo novo, consulte:
+
+- docs/03_ARCHITECTURE.md
+- docs/04_DATABASE.md
+- docs/06_FEATURES.md
+- docs/07_ADMIN_PANEL.md
+
+## Reutilização
+
+Antes de criar:
+
+- componentes
+- hooks
+- utilitários
+- APIs
+- páginas
+- tabelas
+- tipos
+- funções
+
+verifique se já existe uma implementação semelhante.
+
+Evite duplicação de código.
+
+## Organização
+
+Sempre respeite a estrutura atual do projeto.
+
+Não mover arquivos de pasta sem aprovação.
+
+Não criar novas pastas sem necessidade.
+
+## Banco de Dados
+
+Nunca criar novas tabelas sem aprovação explícita.
+
+Nunca remover colunas existentes.
+
+Nunca alterar políticas RLS sem autorização.
+
+## APIs
+
+Antes de criar uma nova API Route, verificar se alguma rota existente já atende ao caso.
+
+Evite duplicar responsabilidades.
+
+## Componentes
+
+Priorize reutilizar componentes existentes.
+
+Somente crie novos componentes quando realmente necessário.
+
+## Refatorações
+
+Nunca realizar grandes refatorações junto com novas funcionalidades.
+
+Cada alteração deve possuir um objetivo único e claramente definido.
+
+## Em caso de dúvida
+
+Pergunte ao usuário antes de tomar decisões arquiteturais.

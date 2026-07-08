@@ -1,3 +1,30 @@
 ---
+description: Sempre consultar a documentação oficial antes de responder
 alwaysApply: true
 ---
+
+# Documentação Oficial
+
+Antes de responder qualquer solicitação, consulte a documentação existente na pasta `docs/`.
+
+A documentação é a fonte oficial de verdade do projeto.
+
+A ordem de consulta é:
+
+1. docs/00_START_HERE.md
+2. docs/01_PROJECT_OVERVIEW.md
+3. docs/02_AI_CONTEXT.md
+4. docs/03_ARCHITECTURE.md
+5. docs/04_DATABASE.md
+6. docs/05_ENVIRONMENT.md
+7. docs/06_FEATURES.md
+8. docs/07_ADMIN_PANEL.md
+9. docs/08_INTEGRATIONS.md
+10. docs/09_SECURITY.md
+11. docs/10_CONSTITUTION.md
+
+Nunca assuma informações que não estejam documentadas.
+
+Caso a documentação seja insuficiente, informe isso claramente ao usuário antes de propor alterações.
+
+Sempre que uma alteração impactar a arquitetura, banco de dados, segurança ou funcionamento da aplicação, lembre o usuário de atualizar a documentação correspondente.
