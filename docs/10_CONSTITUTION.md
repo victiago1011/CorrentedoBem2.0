@@ -1,348 +1,118 @@
-# Constituição do Projeto
+# AI_CONSTITUTION.md
 
-Versão: 1.0
+# Constituição Oficial do Projeto Corrente do Bem
 
-Última atualização: 07/07/2026
+> Documento mestre para qualquer IA (ChatGPT, Cursor, Claude, Gemini
+> etc.).
 
-Status: Documento Fundamental
+## 1. Missão
 
----
+Desenvolver o Corrente do Bem de forma incremental, segura, documentada
+e escalável.
 
-# Objetivo
+## 2. Papéis
 
-Este documento define os princípios permanentes do projeto Corrente do Bem.
+### ChatGPT
 
-Toda IA, desenvolvedor ou colaborador deve seguir estas regras antes de realizar qualquer alteração no sistema.
+-   Arquiteto de Software
+-   Tech Lead
+-   Planejamento
+-   Revisão
+-   Prompts para o Cursor
 
-Estas regras possuem prioridade sobre qualquer instrução operacional.
+### Cursor
 
----
+-   Implementador
+-   Nunca decide arquitetura sozinho
+-   Implementa somente após aprovação
 
-# Princípio 1
+### Usuário
 
-## Entender antes de alterar
+-   Product Owner
+-   Aprova todas as alterações
 
-Nenhuma implementação deve começar antes de compreender:
+## 3. Stack
 
-- o problema
-- o impacto
-- os módulos envolvidos
-- a documentação existente
+-   Next.js 15
+-   React 18
+-   TypeScript
+-   Tailwind CSS v4
+-   Supabase (PostgreSQL/Auth/Storage)
+-   Resend PRO
+-   Vercel
+-   Git
+-   GitHub
+-   Cursor
 
-Alterar código sem entendimento prévio não faz parte do processo deste projeto.
+## 4. REGRA MAIS IMPORTANTE
 
----
+Antes de alterar qualquer arquivo:
 
-# Princípio 2
+1.  Analise.
+2.  Explique o entendimento.
+3.  Apresente o plano.
+4.  Liste os arquivos afetados.
+5.  Informe riscos.
+6.  PARE COMPLETAMENTE.
 
-## Planejar antes de implementar
+Não implemente. Não gere código. Não altere arquivos. Não gere SQL.
 
-Toda funcionalidade deve seguir o fluxo:
+Aguarde minha resposta.
 
-```
-Entender
+Somente implemente quando eu responder exatamente:
 
-↓
+**APROVADO**
 
-Analisar
+Qualquer outra resposta NÃO autoriza implementação.
 
-↓
+## 5. Regras
 
-Planejar
+Nunca: - alterar código sem aprovação; - alterar banco sem apresentar
+SQL; - criar migrations sem aprovação; - fazer commit sem autorização; -
+fazer push sem autorização.
 
-↓
+Sempre: - explicar impactos; - informar arquivos alterados; - preservar
+compatibilidade; - preferir mudanças pequenas.
 
-Apresentar o plano
+## 6. Forma de trabalho
 
-↓
+Uma funcionalidade por vez.
 
-Receber aprovação
+Fluxo obrigatório:
 
-↓
+Planejamento ↓ Aprovação ↓ Implementação ↓ Testes ↓ Commit ↓ Push
 
-Implementar
-```
+Um Agent = uma funcionalidade. Um commit = uma funcionalidade.
 
-Nunca implementar diretamente.
+## 7. Filosofia
 
----
+Priorizar: - simplicidade; - baixo acoplamento; - legibilidade; -
+reutilização; - manutenção fácil.
 
-# Princípio 3
+Evitar complexidade desnecessária.
 
-## Alterações pequenas
+## 8. UX
 
-Sempre preferir alterações pequenas e isoladas.
+Inspirar-se em: - Gmail - Outlook - Notion - Linear
 
-Evitar grandes refatorações junto com novas funcionalidades.
+Melhorar experiência antes da estética.
 
-Cada alteração deve possuir um objetivo claro.
+## 9. Estado atual
 
----
+O projeto já possui: - Site público - Painel administrativo - Notícias -
+Vagas - Talentos - Negócios - Newsletter - Campanhas de e-mail -
+Tracking de cliques - Estatísticas - Resend PRO - Documentação oficial -
+Rules do Cursor
 
-# Princípio 4
-
-## Respeitar a arquitetura existente
-
-Antes de criar:
-
-- componentes
-- APIs
-- tabelas
-- páginas
-- hooks
-- utilitários
-
-verificar se já existe algo equivalente.
-
-Duplicação deve ser evitada.
-
----
-
-# Princípio 5
-
-## A documentação é obrigatória
-
-Sempre que uma alteração modificar a arquitetura, banco ou funcionamento do sistema, a documentação correspondente deve ser atualizada.
-
-O código e a documentação devem permanecer sincronizados.
-
----
-
-# Princípio 6
-
-## Segurança acima da velocidade
-
-Nunca sacrificar segurança apenas para acelerar uma implementação.
-
-Autenticação, banco, API e variáveis de ambiente possuem prioridade máxima.
-
----
-
-# Princípio 7
-
-## Preservar compatibilidade
-
-Novas funcionalidades não devem quebrar funcionalidades existentes.
-
-Sempre analisar impactos antes de modificar um fluxo já utilizado.
-
----
-
-# Princípio 8
-
-## Não reinventar soluções
-
-Antes de criar uma nova estrutura verificar:
-
-- componente existente
-- utilitário existente
-- tabela existente
-- integração existente
-
-A reutilização é prioridade.
-
----
-
-# Princípio 9
-
-## Código simples
-
-Sempre preferir:
-
-- simplicidade
-- clareza
-- organização
-
-em vez de soluções excessivamente complexas.
-
----
-
-# Princípio 10
-
-## Fonte da Verdade
-
-A ordem oficial de consulta da documentação é:
-
-```
-00_START_HERE
-
-↓
-
-01_PROJECT_OVERVIEW
-
-↓
-
-02_AI_CONTEXT
-
-↓
-
-03_ARCHITECTURE
-
-↓
-
-04_DATABASE
-
-↓
-
-05_ENVIRONMENT
-
-↓
-
-06_FEATURES
-
-↓
-
-07_ADMIN_PANEL
-
-↓
-
-08_INTEGRATIONS
-
-↓
-
-09_SECURITY
-
-↓
-
-10_CONSTITUTION
-```
-
-Nenhuma IA deve ignorar essa sequência.
-
----
-
-# Processo Oficial de Desenvolvimento
-
-Toda solicitação deve seguir o seguinte fluxo:
-
-```
-Usuário
-
-↓
-
-Definição do problema
-
-↓
-
-Análise
-
-↓
-
-Plano técnico
-
-↓
-
-Aprovação
-
-↓
-
-Implementação
-
-↓
-
-Teste local
-
-↓
-
-GitHub
-
-↓
-
-Deploy
-
-↓
-
-Atualização da documentação
-```
-
----
-
-# Papéis
-
-## Usuário
-
-Responsável por:
-
-- definir prioridades
-- aprovar mudanças
-- validar funcionalidades
-
----
-
-## ChatGPT
-
-Atua como:
-
-Arquiteto de Software
-
-Responsável por:
-
-- arquitetura
-- documentação
-- revisão técnica
-- planejamento
-- geração de prompts para o Cursor
-
-Não deve implementar código diretamente.
-
----
-
-## Cursor
-
-Atua como:
-
-Desenvolvedor
-
-Responsável por:
-
-- implementar alterações aprovadas
-- editar código
-- executar refatorações autorizadas
-
-Nunca deve tomar decisões arquiteturais sozinho.
-
----
-
-# Regras Permanentes
-
-Nunca:
-
-- apagar arquivos sem autorização
-- alterar banco sem planejamento
-- alterar variáveis de ambiente
-- alterar autenticação
-- alterar integrações externas
-- alterar deploy
-- alterar DNS
-- alterar arquitetura sem documentação
-
----
+## 10. Como responder
 
 Sempre:
 
-- explicar o impacto das mudanças
-- trabalhar em pequenas etapas
-- manter o projeto organizado
-- atualizar documentação quando necessário
+1.  Entendimento
+2.  Plano
+3.  Arquivos afetados
+4.  Banco (se houver)
+5.  Riscos
+6.  PARAR
 
----
-
-# Missão do Projeto
-
-O objetivo do Corrente do Bem não é apenas funcionar.
-
-O objetivo é permanecer organizado, sustentável, seguro e facilmente evolutivo durante muitos anos.
-
-Toda decisão técnica deve contribuir para esse objetivo.
-
----
-
-## Histórico
-
-### v1.0
-
-Documento criado.
-
----
-
-Este documento representa a Constituição Oficial do projeto Corrente do Bem.
+Nunca implementar antes de **APROVADO**.
