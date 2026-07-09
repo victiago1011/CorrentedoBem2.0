@@ -35,6 +35,8 @@ import { supabase } from '@/lib/supabase';
 import {
   fetchAllNewsletterSubscribers,
   fetchNewsletterCounts,
+  isValidEmail,
+  normalizeEmail,
 } from '@/lib/newsletter-utils';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -104,6 +106,7 @@ export default function EmailsAdminPage() {
   const [btnText, setBtnText] = useState('');
   const [btnLink, setBtnLink] = useState('');
   const [testEmail, setTestEmail] = useState('');
+  const [testEmailsManual, setTestEmailsManual] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [isSendingCampaign, setIsSendingCampaign] = useState(false);
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
@@ -377,15 +380,79 @@ export default function EmailsAdminPage() {
     }
   };
 
+  const parseManualTestEmails = (raw: string): { valid: string[]; invalid: string[] } => {
+    const parts = raw
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    const valid: string[] = [];
+    const invalid: string[] = [];
+    const seen = new Set<string>();
+
+    for (const part of parts) {
+      const normalized = normalizeEmail(part);
+      if (!isValidEmail(normalized)) {
+        invalid.push(part);
+        continue;
+      }
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        valid.push(normalized);
+      }
+    }
+
+    return { valid, invalid };
+  };
+
   // Send Test Email
   const handleSendTest = async () => {
-    if (!testEmail.trim() || !testEmail.includes('@')) {
-      triggerToast('Insira seu e-mail do Zoho/pessoal de teste.', 'error');
-      return;
-    }
     if (!campaignSubject.trim() || !campaignContent.trim()) {
       triggerToast('Escreva o assunto e conteúdo antes de testar.', 'error');
       return;
+    }
+
+    const manualRaw = testEmailsManual.trim();
+    let requestBody: Record<string, unknown>;
+
+    if (manualRaw) {
+      const { valid, invalid } = parseManualTestEmails(manualRaw);
+
+      if (invalid.length > 0) {
+        triggerToast(`E-mails inválidos: ${invalid.join(', ')}`, 'error');
+        return;
+      }
+
+      if (valid.length === 0) {
+        triggerToast('Informe ao menos um e-mail válido no campo de destinatários manuais.', 'error');
+        return;
+      }
+
+      if (valid.length > 10) {
+        triggerToast('O teste manual aceita no máximo 10 destinatários.', 'error');
+        return;
+      }
+
+      requestBody = {
+        subject: campaignSubject,
+        content: campaignContent,
+        primaryButtonText: btnText || null,
+        primaryButtonLink: btnLink || null,
+        testEmails: valid,
+      };
+    } else {
+      if (!testEmail.trim() || !isValidEmail(normalizeEmail(testEmail))) {
+        triggerToast('Insira seu e-mail do Zoho/pessoal de teste.', 'error');
+        return;
+      }
+
+      requestBody = {
+        subject: campaignSubject,
+        content: campaignContent,
+        primaryButtonText: btnText || null,
+        primaryButtonLink: btnLink || null,
+        testEmail: normalizeEmail(testEmail),
+      };
     }
 
     setIsSendingTest(true);
@@ -395,13 +462,7 @@ export default function EmailsAdminPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          subject: campaignSubject,
-          content: campaignContent,
-          primaryButtonText: btnText || null,
-          primaryButtonLink: btnLink || null,
-          testEmail: testEmail.trim().toLowerCase(),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const resData = await response.json();
@@ -413,7 +474,12 @@ export default function EmailsAdminPage() {
         );
       }
 
-      triggerToast('E-mail de teste disparado! Verifique sua caixa de entrada.');
+      const sentCount = resData.sentCount ?? 1;
+      triggerToast(
+        sentCount > 1
+          ? `E-mail de teste enviado para ${sentCount} destinatários!`
+          : 'E-mail de teste disparado! Verifique sua caixa de entrada.'
+      );
     } catch (err: any) {
       triggerToast(`Erro no teste: ${err.message}`, 'error');
     } finally {
@@ -922,15 +988,20 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
               </div>
 
               {/* Assunto — linha única estilo Gmail */}
-              <div className="flex items-center gap-4 px-6 py-3 border-b border-slate-100">
-                <span className="text-xs font-semibold text-slate-400 shrink-0 w-16">Assunto</span>
-                <input
-                  type="text"
-                  placeholder="Ex: Novidades do mês da Corrente do Bem"
-                  value={campaignSubject}
-                  onChange={(e) => setCampaignSubject(e.target.value)}
-                  className="flex-1 border-0 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-0"
-                />
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/70">
+                <div className="flex items-center gap-4">
+                  <label htmlFor="campaign-subject" className="text-sm font-bold text-slate-800 shrink-0 w-16">
+                    Assunto
+                  </label>
+                  <input
+                    id="campaign-subject"
+                    type="text"
+                    placeholder="Ex: Novidades do mês da Corrente do Bem"
+                    value={campaignSubject}
+                    onChange={(e) => setCampaignSubject(e.target.value)}
+                    className="flex-1 bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-[#00628c]/25 focus:border-[#00628c] shadow-sm transition"
+                  />
+                </div>
               </div>
 
               {/* Corpo do e-mail */}
@@ -996,31 +1067,51 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                 <p className="text-xs text-amber-800/80 mb-4 ml-8">
                   Envie uma cópia para seu e-mail antes de enviar para todos.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3 ml-0 sm:ml-8">
-                  <input
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                    className="flex-1 bg-white border border-amber-200/80 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 transition"
-                  />
-                  <button
-                    onClick={handleSendTest}
-                    disabled={isSendingTest}
-                    className="shrink-0 flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white font-bold text-sm rounded-lg shadow-sm transition"
-                  >
-                    {isSendingTest ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Enviando...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4" />
-                        Enviar teste
-                      </>
-                    )}
-                  </button>
+                <div className="space-y-4 ml-0 sm:ml-8">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={testEmail}
+                      onChange={(e) => setTestEmail(e.target.value)}
+                      disabled={!!testEmailsManual.trim()}
+                      className="flex-1 bg-white border border-amber-200/80 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 transition disabled:bg-amber-100/50 disabled:text-slate-500"
+                    />
+                    <button
+                      onClick={handleSendTest}
+                      disabled={isSendingTest}
+                      className="shrink-0 flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white font-bold text-sm rounded-lg shadow-sm transition"
+                    >
+                      {isSendingTest ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Enviar teste
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div>
+                    <label htmlFor="test-emails-manual" className="block text-xs font-bold text-amber-900 mb-1.5">
+                      Teste para destinatários manuais (opcional)
+                    </label>
+                    <input
+                      id="test-emails-manual"
+                      type="text"
+                      placeholder="email1@gmail.com; email2@gmail.com; email3@gmail.com"
+                      value={testEmailsManual}
+                      onChange={(e) => setTestEmailsManual(e.target.value)}
+                      className="w-full bg-white border border-amber-200/80 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 transition"
+                    />
+                    <p className="text-[11px] text-amber-800/70 mt-1.5">
+                      Separe até 10 e-mails com ponto e vírgula. Se preenchido, o teste será enviado para estes destinatários em vez do campo acima.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

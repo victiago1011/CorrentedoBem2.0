@@ -50,7 +50,7 @@ function summarizeResendError(data: unknown): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { subject, content, primaryButtonText, primaryButtonLink, testEmail } = await req.json();
+    const { subject, content, primaryButtonText, primaryButtonLink, testEmail, testEmails } = await req.json();
 
     if (!subject || !content) {
       return NextResponse.json(
@@ -138,36 +138,143 @@ export async function POST(req: NextRequest) {
       `;
     };
 
-    // Case 1: Send a single Test Email
-    if (testEmail) {
+    const isTestRequest =
+      (typeof testEmail === 'string' && testEmail.trim()) ||
+      (Array.isArray(testEmails) && testEmails.length > 0);
+
+    // Case 1: Send Test Email(s)
+    if (isTestRequest) {
       const mockId = '00000000-0000-0000-0000-000000000000';
-      const testHtml = renderTemplate(mockId, 'Testador', testEmail);
-      
-      const res = await fetch('https://api.resend.com/emails', {
+      let recipients: string[] = [];
+
+      if (Array.isArray(testEmails) && testEmails.length > 0) {
+        if (testEmails.length > 10) {
+          return NextResponse.json(
+            { error: 'O teste manual aceita no máximo 10 destinatários.' },
+            { status: 400 }
+          );
+        }
+
+        const invalidEmails: string[] = [];
+        const seen = new Set<string>();
+
+        for (const raw of testEmails) {
+          if (typeof raw !== 'string') {
+            invalidEmails.push(String(raw));
+            continue;
+          }
+          const normalized = normalizeEmail(raw);
+          if (!isValidEmail(normalized)) {
+            invalidEmails.push(raw.trim());
+            continue;
+          }
+          if (!seen.has(normalized)) {
+            seen.add(normalized);
+            recipients.push(normalized);
+          }
+        }
+
+        if (invalidEmails.length > 0) {
+          return NextResponse.json(
+            {
+              error: 'Um ou mais e-mails de teste são inválidos.',
+              invalidEmails,
+            },
+            { status: 400 }
+          );
+        }
+
+        if (recipients.length === 0) {
+          return NextResponse.json(
+            { error: 'Informe ao menos um e-mail válido para o teste.' },
+            { status: 400 }
+          );
+        }
+      } else {
+        const normalized = normalizeEmail(String(testEmail));
+        if (!isValidEmail(normalized)) {
+          return NextResponse.json(
+            { error: 'O e-mail de teste informado é inválido.' },
+            { status: 400 }
+          );
+        }
+        recipients = [normalized];
+      }
+
+      const sendTestEmail = async (recipientEmail: string) => {
+        const testHtml = renderTemplate(mockId, 'Testador', recipientEmail);
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            from: 'Corrente do Bem <contato@send.correntedobembr.com.br>',
+            to: [recipientEmail],
+            subject: `[TEST CAMPAIGN] ${subject}`,
+            html: testHtml,
+          }),
+        });
+
+        const data = await res.json();
+        return { res, data, recipientEmail };
+      };
+
+      if (recipients.length === 1) {
+        const { res, data } = await sendTestEmail(recipients[0]);
+        if (!res.ok) {
+          const errorDetails = summarizeResendError(data);
+          console.error('[send-campaign] Resend test email error:', {
+            status: res.status,
+            statusText: res.statusText,
+            response: data,
+          });
+          return NextResponse.json(
+            {
+              error: 'Erro do Resend ao enviar e-mail de teste',
+              resendMessage: errorDetails,
+              errorDetails,
+            },
+            { status: res.status >= 400 && res.status < 600 ? res.status : 502 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          sentCount: 1,
+          message: 'E-mail de teste enviado com sucesso!',
+        });
+      }
+
+      const batchPayload = recipients.map((recipientEmail) => ({
+        from: 'Corrente do Bem <contato@send.correntedobembr.com.br>',
+        to: [recipientEmail],
+        subject: `[TEST CAMPAIGN] ${subject}`,
+        html: renderTemplate(mockId, 'Testador', recipientEmail),
+      }));
+
+      const res = await fetch('https://api.resend.com/emails/batch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          from: 'Corrente do Bem <contato@send.correntedobembr.com.br>',
-          to: [testEmail],
-          subject: `[TEST CAMPAIGN] ${subject}`,
-          html: testHtml,
-        }),
+        body: JSON.stringify(batchPayload),
       });
 
       const data = await res.json();
       if (!res.ok) {
         const errorDetails = summarizeResendError(data);
-        console.error('[send-campaign] Resend test email error:', {
+        console.error('[send-campaign] Resend manual test batch error:', {
           status: res.status,
           statusText: res.statusText,
+          recipientCount: recipients.length,
           response: data,
         });
         return NextResponse.json(
           {
-            error: 'Erro do Resend ao enviar e-mail de teste',
+            error: 'Erro do Resend ao enviar e-mails de teste',
             resendMessage: errorDetails,
             errorDetails,
           },
@@ -175,7 +282,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      return NextResponse.json({ success: true, message: 'E-mail de teste enviado com sucesso!' });
+      return NextResponse.json({
+        success: true,
+        sentCount: recipients.length,
+        message: `E-mails de teste enviados para ${recipients.length} destinatários.`,
+      });
     }
 
     // Case 2: Send Campaign to all Active subscribers (paginated fetch)
