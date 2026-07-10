@@ -96,9 +96,10 @@ O painel `/admin` concentra a gestão de:
 - Negócios
 - Notícias (criação com editor rich text)
 - Depoimentos
-- Mensagens de contato
 - Configurações da plataforma
 - Histórico de ações administrativas
+
+Mensagens do formulário de contato **não** aparecem no painel: são enviadas por e-mail via Resend.
 
 ### 4. API Interna (rotas do servidor)
 
@@ -172,7 +173,8 @@ Scripts SQL de configuração (executados manualmente no painel Supabase):
 
 Usado para:
 
-- Notificações ao admin (novo cadastro, nova mensagem de contato)
+- Notificações ao admin (novo cadastro)
+- Mensagens do formulário de contato (envio direto por e-mail, sem gravação no banco)
 - E-mails de aprovação/rejeição para usuários
 - Campanhas de newsletter em massa
 
@@ -181,6 +183,14 @@ Variável necessária:
 - `RESEND_API_KEY` (somente servidor, não exposta ao navegador)
 
 Remetente configurado: `Corrente do Bem <contato@send.correntedobembr.com.br>`
+
+#### Formulário de contato (`/contato`)
+
+1. O visitante preenche e o sistema valida os dados.
+2. A mensagem é enviada via `POST /api/send-email` (Resend) para `robinho@correntedobembr.com.br`.
+3. O e-mail do visitante é usado como **Reply-To**.
+4. O formulário só exibe sucesso se o Resend confirmar o envio; em falha, mostra mensagem amigável e permite nova tentativa.
+5. A mensagem **não** é salva no banco de dados.
 
 ---
 
@@ -193,7 +203,7 @@ Remetente configurado: `Corrente do Bem <contato@send.correntedobembr.com.br>`
 | `negocios` | Oportunidades de negócio |
 | `noticias` | Artigos e notícias |
 | `testimonials` | Depoimentos |
-| `contatos` | Mensagens do formulário de contato |
+| `contatos` | Legada — permanece no banco por compatibilidade e registros históricos; **não** é mais usada pela aplicação |
 | `settings` | Configurações da plataforma (registro único) |
 | `history` | Log de ações do admin |
 | `newsletter_subscribers` | Inscritos da newsletter |

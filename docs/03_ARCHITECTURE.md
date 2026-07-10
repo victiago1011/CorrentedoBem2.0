@@ -147,7 +147,7 @@ Todas seguem a mesma estrutura:
 
 ### Padrão do painel admin
 
-- `app/admin/page.tsx` — arquivo único que concentra todas as views de moderação (vagas, talentos, negócios, notícias, depoimentos, contatos, configurações, histórico)
+- `app/admin/page.tsx` — arquivo único que concentra todas as views de moderação (vagas, talentos, negócios, notícias, depoimentos, configurações, histórico)
 - `app/admin/emails/page.tsx` — gestão de inscritos, campanhas e analytics
 - Navegação interna por estado (`activeView`) — não usa sub-rotas
 - Editor rich text via `react-quill-new` (import dinâmico, sem SSR)
@@ -183,7 +183,7 @@ app/api/
 
 | Rota | Entrada | Saída | Integrações |
 |---|---|---|---|
-| `POST /api/send-email` | `{ to, subject, html }` | JSON `{ success, data }` | Resend API |
+| `POST /api/send-email` | `{ to, subject, html, replyTo? }` | JSON `{ success, data }` | Resend API |
 | `POST /api/send-campaign` | `{ subject, content, primaryButtonText?, primaryButtonLink?, testEmail? }` | JSON com contadores de envio | Supabase (`newsletter_subscribers`, `history`) + Resend API |
 | `GET /api/unsubscribe` | Query: `id` ou `email`, opcional `resubscribe=true` | Página HTML | Supabase (`newsletter_subscribers`) |
 | `POST /api/track-visit` | (sem body) | JSON `{ success }` | Supabase (`site_analytics`) |
@@ -231,7 +231,7 @@ export const supabase = createClient(
 | `negocios` | SELECT (público), INSERT (cadastro), UPDATE/DELETE (admin) |
 | `noticias` | SELECT (público), INSERT/UPDATE/DELETE (admin) |
 | `testimonials` | SELECT (público), INSERT (cadastro), UPDATE/DELETE (admin) |
-| `contatos` | INSERT (formulário), SELECT/UPDATE/DELETE (admin) |
+| `contatos` | Nenhuma operação no código (tabela legada no Supabase; não lida nem alimentada pela aplicação) |
 | `settings` | SELECT/UPDATE (admin) |
 | `history` | INSERT (admin, API), SELECT (admin) |
 | `newsletter_subscribers` | SELECT/INSERT/UPDATE/DELETE (admin, API) |
@@ -241,7 +241,7 @@ export const supabase = createClient(
 
 | Contexto | Arquivos |
 |---|---|
-| Páginas públicas | `app/page.tsx`, `app/vagas/page.tsx`, `app/talentos/page.tsx`, `app/negocios/page.tsx`, `app/noticias/page.tsx`, `app/noticias/[slug]/page.tsx`, `app/depoimentos/page.tsx`, `app/contato/page.tsx` |
+| Páginas públicas | `app/page.tsx`, `app/vagas/page.tsx`, `app/talentos/page.tsx`, `app/negocios/page.tsx`, `app/noticias/page.tsx`, `app/noticias/[slug]/page.tsx`, `app/depoimentos/page.tsx` |
 | Formulários de cadastro | `app/vagas/cadastrar/page.tsx`, `app/talentos/cadastrar/page.tsx`, `app/negocios/cadastrar/page.tsx`, `app/depoimentos/novo/page.tsx` |
 | Admin | `app/admin/page.tsx`, `app/admin/emails/page.tsx`, `app/admin/login/page.tsx` |
 | API Routes | `app/api/send-campaign/route.ts`, `app/api/unsubscribe/route.ts`, `app/api/track-visit/route.ts`, `app/api/track-click/route.ts` |
@@ -271,6 +271,8 @@ Autenticação via header: `Authorization: Bearer ${RESEND_API_KEY}`
 
 Todas as mensagens saem de: `Corrente do Bem <contato@send.correntedobembr.com.br>`
 
+No formulário de contato, o e-mail do visitante é enviado como **Reply-To** (`replyTo` → `reply_to` na API do Resend).
+
 ### Fluxos de e-mail
 
 ```
@@ -282,7 +284,11 @@ Todas as mensagens saem de: `Corrente do Bem <contato@send.correntedobembr.com.b
 │  Admin (aprovação) ─┘         │                              │
 │                               ▼                              │
 │                    robinho@correntedobembr.com.br            │
-│                    (ou e-mail do usuário, em aprovações)   │
+│                    (ou e-mail do usuário, em aprovações)     │
+│                                                              │
+│  Contato: Reply-To = e-mail do visitante;                    │
+│  sucesso na UI só se o Resend confirmar o envio;             │
+│  mensagem não é salva no banco.                              │
 └──────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────┐
@@ -354,7 +360,7 @@ O projeto usa **Supabase Auth** exclusivamente para o painel administrativo. Vis
 | **Negócios** | `/negocios`, `/negocios/cadastrar` | Listagem e cadastro de oportunidades de negócio |
 | **Notícias** | `/noticias`, `/noticias/[slug]` | Listagem e leitura de artigos |
 | **Depoimentos** | `/depoimentos`, `/depoimentos/novo` | Exibição e envio de depoimentos |
-| **Contato** | `/contato` | Formulário de mensagem |
+| **Contato** | `/contato` | Formulário que envia e-mail via Resend (sem persistência; sem view no admin) |
 | **Institucional** | `/privacidade`, `/termos` | Páginas estáticas de política e termos |
 | **Admin — Moderação** | `/admin` | Aprovação, edição e exclusão de todo conteúdo |
 | **Admin — Newsletter** | `/admin/emails` | Gestão de inscritos, campanhas e analytics |
@@ -388,7 +394,28 @@ Admin vê item em /admin (aba Pendentes)
                        → INSERT em history
 ```
 
-### Fluxo 2 — Exibição pública
+### Fluxo 2 — Formulário de contato
+
+```
+Visitante preenche /contato
+        │
+        ▼
+Validação dos dados no cliente
+        │
+        ▼
+POST /api/send-email
+  to: robinho@correntedobembr.com.br
+  replyTo: e-mail do visitante
+  from: contato@send.correntedobembr.com.br
+        │
+        ├── Resend OK → formulário exibe sucesso
+        │
+        └── Falha → mensagem amigável; visitante pode tentar de novo
+
+(Não há INSERT em contatos. Não há view "Mensagens de Contato" no painel.)
+```
+
+### Fluxo 3 — Exibição pública
 
 ```
 Página pública carrega (useEffect)
@@ -400,7 +427,7 @@ SELECT no Supabase WHERE status = 'active' (ou 'approved' para depoimentos)
 Dados renderizados no navegador (filtros e paginação no cliente)
 ```
 
-### Fluxo 3 — Campanha de newsletter
+### Fluxo 4 — Campanha de newsletter
 
 ```
 Admin compõe campanha em /admin/emails
@@ -417,7 +444,7 @@ POST /api/send-campaign
               → INSERT em history com resultado
 ```
 
-### Fluxo 4 — Rastreamento
+### Fluxo 5 — Rastreamento
 
 ```
 Visitante navega no site
@@ -443,7 +470,7 @@ GET /api/track-click?id=...&url=...
         └── Redirect 302 para URL de destino
 ```
 
-### Fluxo 5 — Descadastro
+### Fluxo 6 — Descadastro
 
 ```
 Inscrito clica "Descadastrar" no e-mail

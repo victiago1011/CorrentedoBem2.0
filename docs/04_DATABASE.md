@@ -14,3 +14,8 @@ O banco é PostgreSQL, hospedado no Supabase, e é acessado pela aplicação atr
 
 ```text
 lib/supabase.ts
+```
+
+### Tabela legada: `contatos`
+
+A tabela `contatos` permanece no banco por compatibilidade e preservação dos registros históricos, mas **não é mais utilizada pela aplicação** (não é lida nem alimentada pelo formulário de contato nem pelo painel administrativo).

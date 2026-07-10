@@ -103,7 +103,21 @@ newsletter_subscribers
 
 ## Contato
 
-Permite envio de mensagens através do formulário.
+Permite o envio de mensagens pelo formulário em `/contato`.
+
+Fluxo atual:
+
+1. O visitante preenche o formulário.
+2. O sistema valida os dados.
+3. A mensagem é enviada pelo Resend (`POST /api/send-email`) para `robinho@correntedobembr.com.br`.
+4. O e-mail do visitante é utilizado como Reply-To.
+5. O remetente institucional é `contato@send.correntedobembr.com.br`.
+6. O formulário só exibe sucesso se o Resend confirmar o envio.
+7. Em caso de falha, o visitante recebe uma mensagem amigável e pode tentar novamente.
+
+A mensagem **não** é salva no banco de dados.
+
+Não existe view “Mensagens de Contato” no painel administrativo.
 
 ---
 
