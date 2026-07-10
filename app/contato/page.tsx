@@ -40,24 +40,33 @@ export default function ContatoPage() {
         throw error;
       }
       
-      // Enviar notificação de e-mail ao administrador
+      // Enviar notificação de e-mail ao administrador (falha não impede o sucesso do formulário)
       try {
-        await fetch('/api/send-email', {
+        const enviadoEm = new Date().toLocaleString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        const emailResponse = await fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             to: 'robinho@correntedobembr.com.br',
-            subject: '🔔 Nova Mensagem de Contato na Corrente do Bem',
+            replyTo: formData.email,
+            subject: `Novo contato pelo site — ${formData.assunto}`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">🔔 Nova Mensagem de Contato Recebida!</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Uma nova mensagem de contato foi enviada pelo formulário "Fale Conosco" do site.</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Novo contato pelo site</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Uma nova mensagem foi enviada pelo formulário de contato.</p>
                 
                 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; margin: 20px 0; border-radius: 12px;">
-                  <h3 style="margin-top: 0; font-size: 16px; color: #0f172a;">Detalhes do Contato</h3>
                   <table style="width: 100%; font-size: 13px; color: #475569; border-collapse: collapse;">
                     <tr>
-                      <td style="padding: 6px 0; font-weight: bold; width: 120px;">Remetente:</td>
+                      <td style="padding: 6px 0; font-weight: bold; width: 120px;">Nome:</td>
                       <td style="padding: 6px 0; color: #010101;">${formData.nome}</td>
                     </tr>
                     <tr>
@@ -70,18 +79,31 @@ export default function ContatoPage() {
                     </tr>
                     <tr>
                       <td style="padding: 6px 0; font-weight: bold; vertical-align: top;">Mensagem:</td>
-                      <td style="padding: 6px 0; color: #010101; font-style: italic;">"${formData.mensagem}"</td>
+                      <td style="padding: 6px 0; color: #010101; white-space: pre-wrap;">${formData.mensagem}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; font-weight: bold;">Data e hora:</td>
+                      <td style="padding: 6px 0; color: #010101;">${enviadoEm}</td>
                     </tr>
                   </table>
                 </div>
 
-                <div style="text-align: center; margin-top: 25px;">
-                  <a href="https://correntedobembr.com.br/admin" style="background-color: #00628c; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block;">Acessar Painel de Moderação</a>
-                </div>
+                <p style="font-size: 13px; line-height: 1.6; color: #334155; margin: 0 0 16px 0;">
+                  Para responder ao visitante, basta clicar em &ldquo;Responder&rdquo;. A resposta será enviada diretamente para o e-mail informado no formulário.
+                </p>
+
+                <p style="font-size: 12px; line-height: 1.5; color: #64748b; margin: 0; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+                  Esta mensagem foi enviada através do formulário de contato do site Corrente do Bem.
+                </p>
               </div>
             `
           })
         });
+
+        if (!emailResponse.ok) {
+          const emailError = await emailResponse.json().catch(() => null);
+          console.error('Erro ao enviar e-mail de notificação de contato:', emailError || emailResponse.statusText);
+        }
       } catch (err) {
         console.error('Erro ao enviar e-mail de notificação de contato:', err);
       }
