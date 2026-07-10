@@ -112,7 +112,7 @@ const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'A
 
   // --- Types ---
 
-type View = 'noticias' | 'vagas' | 'curriculos' | 'negocios' | 'historico' | 'configuracoes' | 'galeria' | 'galeria_vagas' | 'galeria_negocios' | 'recusados' | 'contatos' | 'depoimentos' | 'pendentes';
+type View = 'noticias' | 'vagas' | 'curriculos' | 'negocios' | 'historico' | 'configuracoes' | 'galeria' | 'galeria_vagas' | 'galeria_negocios' | 'recusados' | 'depoimentos' | 'pendentes';
 
 interface Testimonial {
   id: string | number;
@@ -206,16 +206,6 @@ interface HistoryItem {
   id: string;
   action: string;
   details: string;
-  created_at: string;
-}
-
-interface Contato {
-  id: string | number;
-  nome: string;
-  email: string;
-  assunto: string;
-  mensagem: string;
-  lida: boolean;
   created_at: string;
 }
 
@@ -374,7 +364,6 @@ const Sidebar = ({ activeView, setView, isOpen, onClose, totalPendingCount = 0 }
             { id: 'galeria_negocios', label: 'Galeria de Negócios', icon: <Zap className="w-5 h-5" /> },
             { id: 'recusados', label: 'Recusados', icon: <XCircle className="w-5 h-5" /> },
             { id: 'historico', label: 'Histórico', icon: <History className="w-5 h-5" /> },
-            { id: 'contatos', label: 'Mensagens de Contato', icon: <Mail className="w-5 h-5" /> },
             { id: 'configuracoes', label: 'Configurações', icon: <Settings className="w-5 h-5" /> },
           ].map((item) => (
             <button
@@ -506,7 +495,6 @@ export default function Dashboard() {
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [contatos, setContatos] = useState<Contato[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -821,7 +809,7 @@ export default function Dashboard() {
   const fetchData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [jobsRes, candidatesRes, negociosRes, noticiasRes, testimonialsRes, historyRes, settingsRes, contatosRes] = await Promise.all([
+      const [jobsRes, candidatesRes, negociosRes, noticiasRes, testimonialsRes, historyRes, settingsRes] = await Promise.all([
         supabase.from('vagas').select('*').order('created_at', { ascending: false }),
         supabase.from('talentos').select('*').order('created_at', { ascending: false }),
         supabase.from('negocios').select('*').order('created_at', { ascending: false }),
@@ -829,7 +817,6 @@ export default function Dashboard() {
         supabase.from('testimonials').select('*').order('created_at', { ascending: false }),
         supabase.from('history').select('*').order('created_at', { ascending: false }),
         supabase.from('settings').select('*').maybeSingle(),
-        supabase.from('contatos').select('*').order('created_at', { ascending: false })
       ]);
 
       if (jobsRes.data) setJobs(jobsRes.data);
@@ -839,7 +826,6 @@ export default function Dashboard() {
       if (testimonialsRes.data) setTestimonials(testimonialsRes.data);
       if (historyRes.data) setHistory(historyRes.data);
       if (settingsRes.data) setSettings(settingsRes.data);
-      if (contatosRes.data) setContatos(contatosRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       triggerToast('Erro ao carregar dados', 'error');
@@ -1884,23 +1870,6 @@ export default function Dashboard() {
     }
   }, [noticias]);
 
-  const deleteContato = React.useCallback(async (id: string | number) => {
-    const { error } = await supabase.from('contatos').delete().eq('id', id);
-    if (!error) {
-      setContatos(prev => prev.filter(c => String(c.id) !== String(id)));
-      triggerToast('Mensagem removida.');
-    } else {
-      triggerToast('Erro ao remover mensagem.', 'error');
-    }
-  }, []);
-
-  const markContatoAsRead = React.useCallback(async (id: string | number) => {
-    const { error } = await supabase.from('contatos').update({ lida: true }).eq('id', id);
-    if (!error) {
-      setContatos(prev => prev.map(c => String(c.id) === String(id) ? { ...c, lida: true } : c));
-    }
-  }, []);
-
   const handleSaveSettings = React.useCallback(async (formData: FormData) => {
     const newSettings = {
       platform_name: formData.get('platform_name') as string,
@@ -2736,91 +2705,6 @@ export default function Dashboard() {
               </motion.div>
             )}
             
-            {activeView === 'contatos' && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-8"
-              >
-                <header>
-                  <h1 className="text-3xl font-extrabold text-primary tracking-tight font-headline">Mensagens de Contato</h1>
-                  <p className="text-on-surface-variant mt-1">Veja quem entrou em contato através do formulário do site.</p>
-                </header>
-
-                <div className="grid grid-cols-1 gap-6 text-left">
-                  {contatos.length > 0 ? (
-                    contatos.map((contato) => (
-                      <div 
-                        key={contato.id} 
-                        className={cn(
-                          "bg-white p-6 rounded-3xl border transition-all duration-300 relative group",
-                          contato.lida ? "border-outline-variant/10 opacity-70" : "border-primary/20 shadow-md shadow-primary/5"
-                        )}
-                      >
-                        {!contato.lida && (
-                          <div className="absolute top-6 right-6 flex items-center gap-2">
-                             <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
-                             <span className="text-[10px] font-black text-primary uppercase tracking-widest">Nova</span>
-                          </div>
-                        )}
-                        
-                        <div className="flex flex-col md:flex-row md:items-start gap-6">
-                          <div className={cn(
-                            "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
-                            contato.lida ? "bg-surface-container-highest text-on-surface-variant" : "bg-primary/10 text-primary"
-                          )}>
-                            <Mail className="w-6 h-6" />
-                          </div>
-                          
-                          <div className="flex-1 space-y-4">
-                            <div>
-                               <div className="flex items-center gap-3 mb-1 flex-wrap">
-                                 <h3 className="text-lg font-bold text-on-surface">{contato.nome}</h3>
-                                 <span className="text-xs font-medium text-on-surface-variant">{contato.email}</span>
-                                 <span className="text-[10px] font-bold text-outline uppercase tracking-widest bg-surface-container-low px-2 py-0.5 rounded-full">
-                                   {new Date(contato.created_at).toLocaleString('pt-BR')}
-                                 </span>
-                               </div>
-                               <p className="text-primary font-bold text-sm">{contato.assunto}</p>
-                            </div>
-
-                            <div className="bg-[#f6f3f2] p-6 rounded-2xl text-on-surface-variant text-sm border border-outline-variant/5 italic shadow-inner">
-                              &quot;{contato.mensagem}&quot;
-                            </div>
-
-                            <div className="flex items-center gap-4 pt-2">
-                              {!contato.lida && (
-                                <button 
-                                  onClick={() => markContatoAsRead(contato.id)}
-                                  className="text-xs font-black uppercase tracking-widest text-primary hover:bg-primary/5 px-4 py-2 rounded-xl transition-all"
-                                >
-                                  Marcar como Lida
-                                </button>
-                              )}
-                              <button 
-                                onClick={() => deleteContato(contato.id)}
-                                className="text-xs font-black uppercase tracking-widest text-error hover:bg-error/5 px-4 py-2 rounded-xl transition-all"
-                              >
-                                Apagar Mensagem
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-outline-variant/30">
-                      <div className="w-20 h-20 bg-surface-container-low rounded-full flex items-center justify-center mx-auto mb-6 text-outline">
-                        <Mail className="w-10 h-10" />
-                      </div>
-                      <p className="text-on-surface-variant font-bold">Nenhuma mensagem recebida ainda.</p>
-                      <p className="text-xs text-outline mt-1">As mensagens enviadas pelo site aparecerão aqui.</p>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-
             {activeView === 'historico' && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}

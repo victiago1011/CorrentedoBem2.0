@@ -6,8 +6,6 @@ import { Footer } from '@/app/components/Footer';
 import { Mail, MessageSquare, Send, ArrowLeft, CheckCircle2, User, Sparkles, Handshake, Instagram, Linkedin, Twitter } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '@/lib/supabase';
-import { cn } from '@/lib/utils';
 
 export default function ContatoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,31 +32,23 @@ export default function ContatoPage() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from('contatos').insert([formData]);
-      if (error) {
-        console.error('Erro detalhado do Supabase:', error);
-        throw error;
-      }
-      
-      // Enviar notificação de e-mail ao administrador (falha não impede o sucesso do formulário)
-      try {
-        const enviadoEm = new Date().toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
+      const enviadoEm = new Date().toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 
-        const emailResponse = await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: 'robinho@correntedobembr.com.br',
-            replyTo: formData.email,
-            subject: `Novo contato pelo site — ${formData.assunto}`,
-            html: `
+      const emailResponse = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: 'robinho@correntedobembr.com.br',
+          replyTo: formData.email,
+          subject: `Novo contato pelo site — ${formData.assunto}`,
+          html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
                 <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Novo contato pelo site</h2>
                 <p style="font-size: 14px; line-height: 1.6; color: #334155;">Uma nova mensagem foi enviada pelo formulário de contato.</p>
@@ -97,23 +87,20 @@ export default function ContatoPage() {
                 </p>
               </div>
             `
-          })
-        });
+        })
+      });
 
-        if (!emailResponse.ok) {
-          const emailError = await emailResponse.json().catch(() => null);
-          console.error('Erro ao enviar e-mail de notificação de contato:', emailError || emailResponse.statusText);
-        }
-      } catch (err) {
-        console.error('Erro ao enviar e-mail de notificação de contato:', err);
+      if (!emailResponse.ok) {
+        console.error('Erro ao enviar e-mail de contato:', emailResponse.statusText);
+        alert('Não foi possível enviar sua mensagem no momento. Por favor, tente novamente em alguns instantes.');
+        return;
       }
-      
+
       setIsSuccess(true);
       setFormData({ nome: '', email: '', assunto: 'Dúvida Geral', mensagem: '' });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erro ao enviar contato:', err);
-      const msg = err?.message || 'Erro desconhecido';
-      alert(`Ocorreu um erro ao enviar sua mensagem: ${msg}. Por favor, verifique se a tabela 'contatos' existe no Supabase.`);
+      alert('Não foi possível enviar sua mensagem no momento. Por favor, tente novamente em alguns instantes.');
     } finally {
       setIsSubmitting(false);
     }
