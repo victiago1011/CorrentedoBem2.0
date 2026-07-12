@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 import 'react-quill-new/dist/quill.snow.css';
@@ -38,8 +38,33 @@ import {
   isValidEmail,
   normalizeEmail,
 } from '@/lib/newsletter-utils';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+
+type EmailTab = 'subscribers' | 'campaign' | 'stats';
+
+type CampaignCategory =
+  | 'curriculos'
+  | 'vagas'
+  | 'noticias'
+  | 'eventos'
+  | 'institucional'
+  | 'outros'
+  | '';
+
+const CAMPAIGN_CATEGORY_OPTIONS: { value: Exclude<CampaignCategory, ''>; label: string }[] = [
+  { value: 'curriculos', label: 'Currículos' },
+  { value: 'vagas', label: 'Vagas' },
+  { value: 'noticias', label: 'Notícias' },
+  { value: 'eventos', label: 'Eventos' },
+  { value: 'institucional', label: 'Institucional' },
+  { value: 'outros', label: 'Outros' },
+];
+
+function parseEmailTab(value: string | null): EmailTab {
+  if (value === 'campaign' || value === 'stats') return value;
+  return 'subscribers';
+}
 
 interface Subscriber {
   id: string;
@@ -61,11 +86,18 @@ interface SiteAnalyticsRow {
 
 const CONTACTS_PER_PAGE = 25;
 
-export default function EmailsAdminPage() {
+function EmailsAdminContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeTab = parseEmailTab(searchParams.get('tab'));
 
-  // Navigation states
-  const [activeTab, setActiveTab] = useState<'subscribers' | 'campaign' | 'stats'>('subscribers');
+  const setActiveTab = (tab: EmailTab) => {
+    if (tab === 'subscribers') {
+      router.replace('/admin/emails', { scroll: false });
+    } else {
+      router.replace(`/admin/emails?tab=${tab}`, { scroll: false });
+    }
+  };
 
   // Site Analytics states
   const [analyticsRows, setAnalyticsRows] = useState<SiteAnalyticsRow[]>([]);
@@ -103,13 +135,22 @@ export default function EmailsAdminPage() {
   // Campaign State
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignContent, setCampaignContent] = useState('');
+  const [campaignCategory, setCampaignCategory] = useState<CampaignCategory>('');
   const [btnText, setBtnText] = useState('');
   const [btnLink, setBtnLink] = useState('');
-  const [testEmail, setTestEmail] = useState('');
-  const [testEmailsManual, setTestEmailsManual] = useState('');
+  const [testRecipientsRaw, setTestRecipientsRaw] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [isSendingCampaign, setIsSendingCampaign] = useState(false);
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
+  const [confirmSendMode, setConfirmSendMode] = useState<'all' | 'selected'>('all');
+  const [recipientSearchQuery, setRecipientSearchQuery] = useState('');
+  const [recipientSearchResults, setRecipientSearchResults] = useState<
+    { id: string; nome: string | null; email: string }[]
+  >([]);
+  const [isSearchingRecipients, setIsSearchingRecipients] = useState(false);
+  const [selectedRecipients, setSelectedRecipients] = useState<
+    { id: string; nome: string | null; email: string }[]
+  >([]);
   const [campaignProgress, setCampaignProgress] = useState<{
     successCount: number;
     failureCount: number;
@@ -130,6 +171,19 @@ export default function EmailsAdminPage() {
     setToast({ text, type });
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  const getAdminAuthHeaders = useCallback(async (): Promise<Record<string, string> | null> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      triggerToast('Sessão expirada. Faça login novamente.', 'error');
+      router.push('/admin/login');
+      return null;
+    }
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    };
+  }, [router, triggerToast]);
 
   // Fetch site visualizer analytics data
   const fetchAnalytics = useCallback(async () => {
@@ -380,9 +434,11 @@ export default function EmailsAdminPage() {
     }
   };
 
+  const MAX_SELECTED_RECIPIENTS = 20;
+
   const parseManualTestEmails = (raw: string): { valid: string[]; invalid: string[] } => {
     const parts = raw
-      .split(';')
+      .split(/[;,\n]+/)
       .map((part) => part.trim())
       .filter(Boolean);
 
@@ -405,6 +461,60 @@ export default function EmailsAdminPage() {
     return { valid, invalid };
   };
 
+  const searchActiveRecipients = useCallback(
+    async (query: string) => {
+      const headers = await getAdminAuthHeaders();
+      if (!headers) return;
+
+      setIsSearchingRecipients(true);
+      try {
+        const params = new URLSearchParams();
+        if (query.trim()) params.set('q', query.trim());
+        const response = await fetch(`/api/newsletter-subscribers/search?${params.toString()}`, {
+          headers: { Authorization: headers.Authorization },
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Falha na busca de inscritos.');
+        }
+        setRecipientSearchResults(data.subscribers || []);
+      } catch (err: any) {
+        triggerToast(err.message || 'Erro ao buscar inscritos.', 'error');
+      } finally {
+        setIsSearchingRecipients(false);
+      }
+    },
+    [getAdminAuthHeaders, triggerToast]
+  );
+
+  useEffect(() => {
+    if (activeTab !== 'campaign') return;
+
+    const handle = window.setTimeout(() => {
+      searchActiveRecipients(recipientSearchQuery);
+    }, 300);
+
+    return () => window.clearTimeout(handle);
+  }, [activeTab, recipientSearchQuery, searchActiveRecipients]);
+
+  const toggleRecipientSelection = (sub: { id: string; nome: string | null; email: string }) => {
+    setSelectedRecipients((prev) => {
+      const exists = prev.some((item) => item.id === sub.id);
+      if (exists) {
+        return prev.filter((item) => item.id !== sub.id);
+      }
+      if (prev.length >= MAX_SELECTED_RECIPIENTS) {
+        triggerToast(`Limite de ${MAX_SELECTED_RECIPIENTS} contatos selecionados atingido.`, 'error');
+        return prev;
+      }
+      return [...prev, sub];
+    });
+  };
+
+  const removeSelectedRecipient = (id: string) => {
+    setSelectedRecipients((prev) => prev.filter((item) => item.id !== id));
+  };
+
   // Send Test Email
   const handleSendTest = async () => {
     if (!campaignSubject.trim() || !campaignContent.trim()) {
@@ -412,57 +522,43 @@ export default function EmailsAdminPage() {
       return;
     }
 
-    const manualRaw = testEmailsManual.trim();
-    let requestBody: Record<string, unknown>;
-
-    if (manualRaw) {
-      const { valid, invalid } = parseManualTestEmails(manualRaw);
-
-      if (invalid.length > 0) {
-        triggerToast(`E-mails inválidos: ${invalid.join(', ')}`, 'error');
-        return;
-      }
-
-      if (valid.length === 0) {
-        triggerToast('Informe ao menos um e-mail válido no campo de destinatários manuais.', 'error');
-        return;
-      }
-
-      if (valid.length > 10) {
-        triggerToast('O teste manual aceita no máximo 10 destinatários.', 'error');
-        return;
-      }
-
-      requestBody = {
-        subject: campaignSubject,
-        content: campaignContent,
-        primaryButtonText: btnText || null,
-        primaryButtonLink: btnLink || null,
-        testEmails: valid,
-      };
-    } else {
-      if (!testEmail.trim() || !isValidEmail(normalizeEmail(testEmail))) {
-        triggerToast('Insira seu e-mail do Zoho/pessoal de teste.', 'error');
-        return;
-      }
-
-      requestBody = {
-        subject: campaignSubject,
-        content: campaignContent,
-        primaryButtonText: btnText || null,
-        primaryButtonLink: btnLink || null,
-        testEmail: normalizeEmail(testEmail),
-      };
+    if ((btnText.trim() && !btnLink.trim()) || (!btnText.trim() && btnLink.trim())) {
+      triggerToast('Preencha texto e link do botão juntos, ou deixe ambos em branco.', 'error');
+      return;
     }
+
+    const { valid, invalid } = parseManualTestEmails(testRecipientsRaw);
+
+    if (invalid.length > 0) {
+      triggerToast(`E-mails inválidos: ${invalid.join(', ')}`, 'error');
+      return;
+    }
+
+    if (valid.length === 0) {
+      triggerToast('Informe ao menos um e-mail válido para o teste.', 'error');
+      return;
+    }
+
+    if (valid.length > 10) {
+      triggerToast('O teste aceita no máximo 10 destinatários.', 'error');
+      return;
+    }
+
+    const headers = await getAdminAuthHeaders();
+    if (!headers) return;
 
     setIsSendingTest(true);
     try {
       const response = await fetch('/api/send-campaign', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+        headers,
+        body: JSON.stringify({
+          subject: campaignSubject,
+          content: campaignContent,
+          primaryButtonText: btnText || null,
+          primaryButtonLink: btnLink || null,
+          testEmails: valid,
+        }),
       });
 
       const resData = await response.json();
@@ -487,6 +583,25 @@ export default function EmailsAdminPage() {
     }
   };
 
+  const validateCampaignBasics = (): boolean => {
+    if (!campaignSubject.trim() || !campaignContent.trim()) {
+      triggerToast('Preencha o assunto e o conteúdo antes de enviar.', 'error');
+      return false;
+    }
+
+    if (!campaignCategory) {
+      triggerToast('Selecione a categoria do e-mail antes de enviar.', 'error');
+      return false;
+    }
+
+    if ((btnText.trim() && !btnLink.trim()) || (!btnText.trim() && btnLink.trim())) {
+      triggerToast('Preencha texto e link do botão juntos, ou deixe ambos em branco.', 'error');
+      return false;
+    }
+
+    return true;
+  };
+
   const openBulkSendConfirm = () => {
     if (isSendingCampaign) return;
 
@@ -496,34 +611,56 @@ export default function EmailsAdminPage() {
       return;
     }
 
-    if (!campaignSubject.trim() || !campaignContent.trim()) {
-      triggerToast('Preencha o assunto e o conteúdo antes de enviar.', 'error');
-      return;
-    }
+    if (!validateCampaignBasics()) return;
 
+    setConfirmSendMode('all');
     setShowBulkConfirmModal(true);
   };
 
-  // Send Core Campaign to Active Users (only after modal confirmation)
+  const openSelectedSendConfirm = () => {
+    if (isSendingCampaign) return;
+
+    if (selectedRecipients.length === 0) {
+      triggerToast('Selecione ao menos um contato para enviar.', 'error');
+      return;
+    }
+
+    if (!validateCampaignBasics()) return;
+
+    setConfirmSendMode('selected');
+    setShowBulkConfirmModal(true);
+  };
+
+  // Send Core Campaign to Active Users or selected (only after modal confirmation)
   const handleSendCampaign = async () => {
     if (isSendingCampaign) return;
+
+    if (!validateCampaignBasics()) return;
+
+    const headers = await getAdminAuthHeaders();
+    if (!headers) return;
 
     setShowBulkConfirmModal(false);
     setIsSendingCampaign(true);
     setCampaignProgress(null);
 
+    const body: Record<string, unknown> = {
+      subject: campaignSubject,
+      content: campaignContent,
+      category: campaignCategory,
+      primaryButtonText: btnText || null,
+      primaryButtonLink: btnLink || null,
+    };
+
+    if (confirmSendMode === 'selected') {
+      body.subscriberIds = selectedRecipients.map((r) => r.id);
+    }
+
     try {
       const response = await fetch('/api/send-campaign', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subject: campaignSubject,
-          content: campaignContent,
-          primaryButtonText: btnText || null,
-          primaryButtonLink: btnLink || null,
-        }),
+        headers,
+        body: JSON.stringify(body),
       });
 
       const resData = await response.json();
@@ -553,8 +690,12 @@ export default function EmailsAdminPage() {
         triggerToast('E-mail enviado com sucesso!');
         setCampaignSubject('');
         setCampaignContent('');
+        setCampaignCategory('');
         setBtnText('');
         setBtnLink('');
+        if (confirmSendMode === 'selected') {
+          setSelectedRecipients([]);
+        }
       } else if (hasFailures) {
         triggerToast(
           `Envio com falhas: ${resData.successCount ?? 0} enviados, ${failureCount} com falha.`,
@@ -566,8 +707,10 @@ export default function EmailsAdminPage() {
     } catch (err: any) {
       setCampaignProgress({
         successCount: 0,
-        failureCount: subscriberCounts.active,
-        totalActiveSubscribers: subscriberCounts.active,
+        failureCount:
+          confirmSendMode === 'selected' ? selectedRecipients.length : subscriberCounts.active,
+        totalActiveSubscribers:
+          confirmSendMode === 'selected' ? selectedRecipients.length : subscriberCounts.active,
         totalValidEmails: 0,
         invalidEmails: [],
         hasFailures: true,
@@ -666,7 +809,7 @@ export default function EmailsAdminPage() {
               <Mail className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold tracking-tight text-slate-800">Campanhas & Contatos</h1>
+              <h1 className="text-xl font-extrabold tracking-tight text-slate-800">Envio de E-mails</h1>
               <p className="text-xs text-slate-500 font-medium">Controle de e-mails, newsletters e notificações em massa</p>
             </div>
           </div>
@@ -703,7 +846,7 @@ export default function EmailsAdminPage() {
               }`}
             >
               <BarChart2 className="w-4 h-4" />
-              Estáticas & Cliques
+              Estatísticas & Cliques
             </button>
           </div>
         </div>
@@ -988,9 +1131,9 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
               </div>
 
               {/* Assunto — linha única estilo Gmail */}
-              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/70">
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/70 space-y-3">
                 <div className="flex items-center gap-4">
-                  <label htmlFor="campaign-subject" className="text-sm font-bold text-slate-800 shrink-0 w-16">
+                  <label htmlFor="campaign-subject" className="text-sm font-bold text-slate-800 shrink-0 w-20">
                     Assunto
                   </label>
                   <input
@@ -1001,6 +1144,24 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                     onChange={(e) => setCampaignSubject(e.target.value)}
                     className="flex-1 bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-[#00628c]/25 focus:border-[#00628c] shadow-sm transition"
                   />
+                </div>
+                <div className="flex items-center gap-4">
+                  <label htmlFor="campaign-category" className="text-sm font-bold text-slate-800 shrink-0 w-20">
+                    Categoria
+                  </label>
+                  <select
+                    id="campaign-category"
+                    value={campaignCategory}
+                    onChange={(e) => setCampaignCategory(e.target.value as CampaignCategory)}
+                    className="flex-1 bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-[#00628c]/25 focus:border-[#00628c] shadow-sm transition"
+                  >
+                    <option value="">Selecione a categoria (obrigatória no envio)</option>
+                    {CAMPAIGN_CATEGORY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1065,53 +1226,177 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                   <h3 className="text-sm font-bold text-amber-900">Enviar e-mail de teste</h3>
                 </div>
                 <p className="text-xs text-amber-800/80 mb-4 ml-8">
-                  Envie uma cópia para seu e-mail antes de enviar para todos.
+                  Digite até 10 e-mails, separados por ponto e vírgula.
                 </p>
-                <div className="space-y-4 ml-0 sm:ml-8">
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="email"
-                      placeholder="seu@email.com"
-                      value={testEmail}
-                      onChange={(e) => setTestEmail(e.target.value)}
-                      disabled={!!testEmailsManual.trim()}
-                      className="flex-1 bg-white border border-amber-200/80 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 transition disabled:bg-amber-100/50 disabled:text-slate-500"
-                    />
-                    <button
-                      onClick={handleSendTest}
-                      disabled={isSendingTest}
-                      className="shrink-0 flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white font-bold text-sm rounded-lg shadow-sm transition"
-                    >
-                      {isSendingTest ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Enviando...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4" />
-                          Enviar teste
-                        </>
-                      )}
-                    </button>
-                  </div>
+                <div className="flex flex-col sm:flex-row gap-3 ml-0 sm:ml-8">
+                  <input
+                    id="test-recipients"
+                    type="text"
+                    placeholder="email1@exemplo.com; email2@exemplo.com"
+                    value={testRecipientsRaw}
+                    onChange={(e) => setTestRecipientsRaw(e.target.value)}
+                    className="flex-1 bg-white border border-amber-200/80 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendTest}
+                    disabled={isSendingTest}
+                    className="shrink-0 flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white font-bold text-sm rounded-lg shadow-sm transition"
+                  >
+                    {isSendingTest ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Enviar teste
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
 
-                  <div>
-                    <label htmlFor="test-emails-manual" className="block text-xs font-bold text-amber-900 mb-1.5">
-                      Teste para destinatários manuais (opcional)
-                    </label>
-                    <input
-                      id="test-emails-manual"
-                      type="text"
-                      placeholder="email1@gmail.com; email2@gmail.com; email3@gmail.com"
-                      value={testEmailsManual}
-                      onChange={(e) => setTestEmailsManual(e.target.value)}
-                      className="w-full bg-white border border-amber-200/80 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 transition"
-                    />
-                    <p className="text-[11px] text-amber-800/70 mt-1.5">
-                      Separe até 10 e-mails com ponto e vírgula. Se preenchido, o teste será enviado para estes destinatários em vez do campo acima.
-                    </p>
+            {/* Envio para selecionados */}
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="bg-[#00628c]/10 p-1.5 rounded-lg">
+                    <Users className="w-4 h-4 text-[#00628c]" />
                   </div>
+                  <h3 className="text-sm font-bold text-slate-800">Enviar para contatos selecionados</h3>
+                </div>
+                <p className="text-xs text-slate-500 ml-8">
+                  Pesquise inscritos ativos, selecione até {MAX_SELECTED_RECIPIENTS} e envie somente para eles.
+                </p>
+              </div>
+
+              <div className="px-6 py-5 space-y-4">
+                <div>
+                  <label htmlFor="recipient-search" className="block text-xs font-bold text-slate-600 mb-1.5">
+                    Buscar por nome ou e-mail
+                  </label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="recipient-search"
+                      type="text"
+                      placeholder="Digite para pesquisar na base..."
+                      value={recipientSearchQuery}
+                      onChange={(e) => setRecipientSearchQuery(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#00628c]/20 focus:border-[#00628c] transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                      Resultados (máx. 10)
+                    </span>
+                    {isSearchingRecipients && (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00628c]" />
+                    )}
+                  </div>
+                  <div className="max-h-56 overflow-y-auto divide-y divide-slate-100">
+                    {recipientSearchResults.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-6 px-4">
+                        {isSearchingRecipients
+                          ? 'Buscando...'
+                          : 'Nenhum inscrito ativo encontrado para esta busca.'}
+                      </p>
+                    ) : (
+                      recipientSearchResults.map((sub) => {
+                        const checked = selectedRecipients.some((s) => s.id === sub.id);
+                        const atLimit = !checked && selectedRecipients.length >= MAX_SELECTED_RECIPIENTS;
+                        return (
+                          <label
+                            key={sub.id}
+                            className={`flex items-center gap-3 px-3 py-2.5 text-sm cursor-pointer hover:bg-slate-50 transition ${
+                              atLimit ? 'opacity-50' : ''
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={atLimit}
+                              onChange={() => toggleRecipientSelection(sub)}
+                              className="rounded border-slate-300 text-[#00628c] focus:ring-[#00628c]"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="font-semibold text-slate-800 block truncate">
+                                {sub.nome || 'Sem nome'}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-mono truncate block">
+                                {sub.email}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold text-slate-700">
+                      Selecionados ({selectedRecipients.length}/{MAX_SELECTED_RECIPIENTS})
+                    </p>
+                    {selectedRecipients.length >= MAX_SELECTED_RECIPIENTS && (
+                      <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                        Limite atingido
+                      </span>
+                    )}
+                  </div>
+                  {selectedRecipients.length === 0 ? (
+                    <p className="text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl px-4 py-5 text-center">
+                      Nenhum contato selecionado ainda.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedRecipients.map((sub) => (
+                        <span
+                          key={sub.id}
+                          className="inline-flex items-center gap-1.5 max-w-full bg-[#00628c]/8 text-[#00628c] border border-[#00628c]/15 rounded-full pl-3 pr-1.5 py-1 text-xs font-semibold"
+                        >
+                          <span className="truncate">{sub.nome || sub.email}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeSelectedRecipient(sub.id)}
+                            className="shrink-0 p-0.5 rounded-full hover:bg-[#00628c]/15 transition"
+                            title="Remover"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={openSelectedSendConfirm}
+                    disabled={isSendingCampaign || selectedRecipients.length === 0}
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-[#00628c] hover:bg-[#004e70] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition w-full sm:w-auto"
+                  >
+                    {isSendingCampaign && confirmSendMode === 'selected' ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Enviar para {selectedRecipients.length} selecionado
+                        {selectedRecipients.length === 1 ? '' : 's'}
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1123,7 +1408,7 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                   <div className="bg-red-100 p-1.5 rounded-lg">
                     <AlertTriangle className="w-4 h-4 text-red-600" />
                   </div>
-                  <h3 className="text-sm font-bold text-red-900">Envio em massa — produção</h3>
+                  <h3 className="text-sm font-bold text-red-900">Enviar para todos os contatos</h3>
                 </div>
                 <p className="text-xs text-red-800/90 ml-8">
                   Esta ação envia o e-mail para <strong>todos os contatos ativos</strong>. Não pode ser desfeita.
@@ -1145,7 +1430,7 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                   disabled={isSendingCampaign || activeSubscribersCount === 0}
                   className="flex items-center justify-center gap-2 px-8 py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold text-sm rounded-xl transition shadow-lg shadow-red-600/20 w-full md:w-auto min-w-[240px]"
                 >
-                  {isSendingCampaign ? (
+                  {isSendingCampaign && confirmSendMode === 'all' ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Enviando...
@@ -1525,26 +1810,52 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
         </div>
       )}
 
-      {/* BULK SEND CONFIRMATION MODAL */}
+      {/* SEND CONFIRMATION MODAL */}
       {showBulkConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="bg-white max-w-md w-full rounded-2xl shadow-2xl p-6 border-2 border-red-200"
+            className={`bg-white max-w-md w-full rounded-2xl shadow-2xl p-6 border-2 ${
+              confirmSendMode === 'all' ? 'border-red-200' : 'border-[#00628c]/30'
+            }`}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="bg-red-100 p-2.5 rounded-full">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+              <div
+                className={`p-2.5 rounded-full ${
+                  confirmSendMode === 'all' ? 'bg-red-100' : 'bg-[#00628c]/10'
+                }`}
+              >
+                <AlertTriangle
+                  className={`w-6 h-6 ${
+                    confirmSendMode === 'all' ? 'text-red-600' : 'text-[#00628c]'
+                  }`}
+                />
               </div>
               <h3 className="text-base font-extrabold text-slate-800">
-                Confirmar envio em massa
+                {confirmSendMode === 'all'
+                  ? 'Confirmar envio em massa'
+                  : 'Confirmar envio para selecionados'}
               </h3>
             </div>
 
             <p className="text-sm text-slate-700 leading-relaxed mb-6">
-              Você tem certeza que deseja enviar este e-mail para{' '}
-              <strong className="text-red-700">{activeSubscribersCount} contatos ativos</strong>?
+              {confirmSendMode === 'all' ? (
+                <>
+                  Você tem certeza que deseja enviar este e-mail para{' '}
+                  <strong className="text-red-700">{activeSubscribersCount} contatos ativos</strong>?
+                </>
+              ) : (
+                <>
+                  Você tem certeza que deseja enviar este e-mail para{' '}
+                  <strong className="text-[#00628c]">
+                    {selectedRecipients.length} contato
+                    {selectedRecipients.length === 1 ? '' : 's'} selecionado
+                    {selectedRecipients.length === 1 ? '' : 's'}
+                  </strong>
+                  ?
+                </>
+              )}
             </p>
 
             <div className="flex items-center justify-end gap-3">
@@ -1560,7 +1871,11 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                 type="button"
                 onClick={handleSendCampaign}
                 disabled={isSendingCampaign}
-                className="px-5 py-2.5 text-sm bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition flex items-center gap-2"
+                className={`px-5 py-2.5 text-sm disabled:cursor-not-allowed text-white font-bold rounded-xl transition flex items-center gap-2 ${
+                  confirmSendMode === 'all'
+                    ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-400'
+                    : 'bg-[#00628c] hover:bg-[#004e70] disabled:bg-slate-400'
+                }`}
               >
                 {isSendingCampaign ? (
                   <>
@@ -1652,5 +1967,20 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
       )}
 
     </div>
+  );
+}
+
+export default function EmailsAdminPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6">
+          <Loader2 className="w-10 h-10 text-[#00628c] animate-spin mb-3" />
+          <p className="text-gray-600 font-medium">Carregando...</p>
+        </div>
+      }
+    >
+      <EmailsAdminContent />
+    </Suspense>
   );
 }
