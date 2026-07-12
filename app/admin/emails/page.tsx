@@ -28,7 +28,8 @@ import {
   Lock,
   Menu,
   CheckCircle2,
-  BarChart2
+  BarChart2,
+  Inbox,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '@/lib/supabase';
@@ -41,8 +42,9 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import CampaignButtonPreview from '@/app/components/admin/emails/CampaignButtonPreview';
+import SentCampaignsPanel from '@/app/components/admin/emails/SentCampaignsPanel';
 
-type EmailTab = 'subscribers' | 'campaign' | 'stats';
+type EmailTab = 'subscribers' | 'campaign' | 'sent' | 'stats';
 
 type CampaignCategory =
   | 'curriculos'
@@ -63,7 +65,7 @@ const CAMPAIGN_CATEGORY_OPTIONS: { value: Exclude<CampaignCategory, ''>; label: 
 ];
 
 function parseEmailTab(value: string | null): EmailTab {
-  if (value === 'campaign' || value === 'stats') return value;
+  if (value === 'campaign' || value === 'sent' || value === 'stats') return value;
   return 'subscribers';
 }
 
@@ -815,7 +817,7 @@ function EmailsAdminContent() {
             </div>
           </div>
 
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/40">
+          <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl border border-slate-200/40">
             <button
               onClick={() => setActiveTab('subscribers')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
@@ -837,6 +839,17 @@ function EmailsAdminContent() {
             >
               <Send className="w-4 h-4" />
               Novo E-mail
+            </button>
+            <button
+              onClick={() => setActiveTab('sent')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                activeTab === 'sent'
+                  ? 'bg-white text-[#00628c] shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Inbox className="w-4 h-4" />
+              Enviados
             </button>
             <button
               onClick={() => setActiveTab('stats')}
@@ -1526,7 +1539,10 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
           </div>
         )}
 
-        {/* TAB 3: Campaigns Stats */}
+        {/* TAB: Enviados */}
+        {activeTab === 'sent' && <SentCampaignsPanel />}
+
+        {/* TAB: Campaigns Stats */}
         {activeTab === 'stats' && (() => {
           // Analytics computations
           const totalSitePageviews = analyticsRows.reduce((sum, r) => sum + (r.pageviews_count || 0), 0);
