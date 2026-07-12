@@ -40,6 +40,7 @@ import {
 } from '@/lib/newsletter-utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import CampaignButtonPreview from '@/app/components/admin/emails/CampaignButtonPreview';
 
 type EmailTab = 'subscribers' | 'campaign' | 'stats';
 
@@ -1189,33 +1190,12 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;`}
                 </p>
               </div>
 
-              {/* Botão opcional */}
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/30">
-                <p className="text-xs font-semibold text-slate-600 mb-3">Botão no e-mail (opcional)</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 font-medium mb-1">Texto do botão</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Acessar portal de vagas"
-                      value={btnText}
-                      onChange={(e) => setBtnText(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#00628c]/20 outline-none transition"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 font-medium mb-1">Link de destino</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: https://correntedobembr.com.br/vagas"
-                      value={btnLink}
-                      onChange={(e) => setBtnLink(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#00628c]/20 outline-none transition"
-                    />
-                  </div>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-2">Os cliques neste botão são rastreados automaticamente.</p>
-              </div>
+              <CampaignButtonPreview
+                buttonText={btnText}
+                buttonLink={btnLink}
+                onButtonTextChange={setBtnText}
+                onButtonLinkChange={setBtnLink}
+              />
 
               {/* Painel de teste */}
               <div className="px-6 py-5 bg-amber-50 border-b border-amber-200/70">
