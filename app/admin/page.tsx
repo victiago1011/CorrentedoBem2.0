@@ -925,10 +925,6 @@ export default function Dashboard() {
     if (!job) return;
 
     const email = job.contact_email || job.email;
-    if (isNotifyChecked && !email) {
-      triggerToast('Erro: Não há e-mail de contato cadastrado para a vaga.', 'error');
-      return;
-    }
 
     const { data, error } = await supabase
       .from('vagas')
@@ -1066,10 +1062,6 @@ export default function Dashboard() {
     if (!cand) return;
 
     const email = cand.email;
-    if (isNotifyChecked && !email) {
-      triggerToast('Erro: Não há e-mail cadastrado para o candidato.', 'error');
-      return;
-    }
 
     const { data, error } = await supabase
       .from('talentos')
@@ -1179,10 +1171,6 @@ export default function Dashboard() {
     if (!testimonial) return;
 
     const email = testimonial.email;
-    if (isNotifyChecked && !email) {
-      triggerToast('Erro: Não há e-mail cadastrado para o depoimento.', 'error');
-      return;
-    }
 
     const { data, error } = await supabase
       .from('testimonials')
@@ -1702,10 +1690,6 @@ export default function Dashboard() {
     if (!negocio) return;
 
     const email = negocio.contact_email;
-    if (isNotifyChecked && !email) {
-      triggerToast('Erro: Não há e-mail de contato cadastrado para este negócio.', 'error');
-      return;
-    }
 
     const { data, error } = await supabase.from('negocios').update({ status: 'rejected' }).eq('id', id).select();
     if (!error && data && data.length > 0) {
