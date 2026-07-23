@@ -60,6 +60,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
 import Link from 'next/link';
+import JobForm, { type JobFormValues } from '@/app/components/forms/JobForm';
 
 // Helper component for candidate images with error fallback
 const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: string; name: string; className?: string }) => {
@@ -612,8 +613,7 @@ export default function Dashboard() {
     title: '',
     message: ''
   });
-  const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
-  const attachmentInputRef = React.useRef<HTMLInputElement>(null);
+  const [isSubmittingJob, setIsSubmittingJob] = useState(false);
 
   const [rejectionJustification, setRejectionJustification] = useState('');
   const [isNotifyChecked, setIsNotifyChecked] = useState(true);
@@ -640,63 +640,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const newAttachmentsList = [...attachments];
-      
-      let currentTotalSize = attachments.reduce((acc, a) => {
-        const base64Str = a.url.split(',')[1] || '';
-        return acc + (base64Str.length * 0.75);
-      }, 0);
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (file.size > 3 * 1024 * 1024) {
-          setErrorModal({
-            isOpen: true,
-            title: 'Arquivo Grande Demais',
-            message: `O arquivo "${file.name}" excede o limite individual de 3MB. Por favor, envie arquivos menores.`
-          });
-          continue;
-        }
-
-        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
-          setErrorModal({
-            isOpen: true,
-            title: 'Limite Combinado Excedido',
-            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB, para garantir que os arquivos sejam gravados de forma estável no banco de dados.`
-          });
-          break;
-        }
-
-        const fileDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        newAttachmentsList.push({
-          name: file.name,
-          url: fileDataUrl
-        });
-
-        currentTotalSize += file.size;
-      }
-
-      setAttachments(newAttachmentsList);
-
-      if (attachmentInputRef.current) {
-        attachmentInputRef.current.value = '';
-      }
-    }
-  };
-
-  const removeAttachment = (indexToRemove: number) => {
-    setAttachments(prev => prev.filter((_, idx) => idx !== indexToRemove));
-  };
-
   const quillModules = {
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
@@ -719,7 +662,6 @@ export default function Dashboard() {
   const [richDescription, setRichDescription] = useState('');
   const [richSummary, setRichSummary] = useState('');
   const [richDescriptionNegocio, setRichDescriptionNegocio] = useState('');
-  const [newJobSalaryNegotiable, setNewJobSalaryNegotiable] = useState(false);
   const [editingJobSalaryNegotiable, setEditingJobSalaryNegotiable] = useState(false);
 
   useEffect(() => {
@@ -1247,7 +1189,7 @@ export default function Dashboard() {
     }
   }, [testimonials]);
 
-  const addJob = React.useCallback(async (newJob: Partial<Job>) => {
+  const addJob = React.useCallback(async (newJob: Partial<Job> & { logo_url?: string }) => {
     const jobData = {
       title: newJob.title || 'Nova Vaga',
       company: newJob.company || 'Empresa',
@@ -1262,6 +1204,7 @@ export default function Dashboard() {
       description: newJob.description || '',
       requirements: newJob.requirements || [],
       attachment_url: newJob.attachment_url || '',
+      logo_url: newJob.logo_url || null,
     };
 
     const { data, error } = await supabase
@@ -1273,8 +1216,7 @@ export default function Dashboard() {
     if (data && !error) {
       setJobs(prev => [data, ...prev]);
       setIsAddingJob(false);
-      setNewJobSalaryNegotiable(false);
-      setAttachments([]);
+      triggerToast('Vaga cadastrada com sucesso!', 'success');
       
       const historyEntry = {
         action: 'Vaga Criada',
@@ -3389,168 +3331,35 @@ export default function Dashboard() {
                     <XCircle className="w-6 h-6 text-on-surface-variant" />
                   </button>
                 </div>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.currentTarget);
-                  addJob({
-                    title: formData.get('title') as string,
-                    company: formData.get('company') as string,
-                    email: formData.get('email') as string,
-                    phone: formData.get('phone') as string,
-                    location: formData.get('location') as string,
-                    type: formData.get('type') as string,
-                    area: formData.get('area') as string,
-                    salary: newJobSalaryNegotiable ? 'A combinar' : (formData.get('salary') as string || ''),
-                    description: richDescription,
-                    requirements: (formData.get('requirements') as string).split('\n').filter(r => r.trim()),
-                    attachment_url: attachments.length > 0 ? JSON.stringify(attachments) : '',
-                  });
-                }} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">Título da Vaga</label>
-                      <input name="title" required className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="Ex: Desenvolvedor React" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">Empresa</label>
-                      <input name="company" required className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="Nome da empresa" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">E-mail de Contato</label>
-                      <input name="email" type="text" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="contato@empresa.com" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">Telefone / WhatsApp</label>
-                      <input 
-                        name="phone" 
-                        className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" 
-                        placeholder="(00) 00000-0000"
-                        onInput={(e) => {
-                          const input = e.target as HTMLInputElement;
-                          input.value = maskPhone(input.value);
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">Localização</label>
-                      <input name="location" required className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="Ex: Remoto" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">Área / Setor</label>
-                      <select name="area" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none">
-                        <option>Tecnologia</option>
-                        <option>Saúde</option>
-                        <option>Finanças</option>
-                        <option>Engenharia</option>
-                        <option>Outros Serviços</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">Tipo</label>
-                      <select name="type" className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none">
-                        <option>Tempo Integral</option>
-                        <option>Meio Período</option>
-                        <option>PJ / Freelance</option>
-                        <option>Híbrido</option>
-                        <option>Remoto</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs font-bold text-on-surface-variant uppercase">Salário</label>
-                        <label className="inline-flex items-center gap-1.5 text-xs font-bold text-primary cursor-pointer select-none">
-                          <input 
-                            type="checkbox"
-                            className="rounded border-outline-variant text-primary focus:ring-primary/40"
-                            checked={newJobSalaryNegotiable}
-                            onChange={(e) => setNewJobSalaryNegotiable(e.target.checked)}
-                          />
-                          A combinar
-                        </label>
-                      </div>
-                      <input 
-                        name="salary" 
-                        disabled={newJobSalaryNegotiable}
-                        placeholder={newJobSalaryNegotiable ? 'A combinar' : 'Ex: R$ 5.000'}
-                        className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none disabled:opacity-50"
-                        onInput={(e) => {
-                          const input = e.target as HTMLInputElement;
-                          input.value = maskCurrency(input.value);
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-on-surface-variant uppercase">Descrição</label>
-                    <div className="bg-white rounded-xl border border-outline-variant/20 overflow-hidden">
-                      <ReactQuill 
-                        theme="snow"
-                        value={richDescription}
-                        onChange={setRichDescription}
-                        modules={quillModules}
-                        formats={quillFormats}
-                        placeholder="Descreva a vaga..."
-                        className="h-48"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-on-surface-variant uppercase">Requisitos (um por linha)</label>
-                    <textarea name="requirements" rows={3} className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none" placeholder="Ex: React&#10;TypeScript&#10;Tailwind"></textarea>
-                  </div>
-
-                  {/* Attachment Section */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold text-on-surface-variant uppercase">Anexos / Documentos (Opcional)</label>
-                      <button
-                        type="button"
-                        onClick={() => attachmentInputRef.current?.click()}
-                        className="text-xs font-bold text-primary flex items-center gap-1.5 hover:opacity-80 transition-opacity bg-primary/10 px-3 py-1.5 rounded-xl cursor-pointer"
-                      >
-                        <Paperclip className="w-3.5 h-3.5" /> Adicionar Arquivos
-                      </button>
-                    </div>
-                    
-                    <input 
-                      type="file"
-                      ref={attachmentInputRef}
-                      onChange={handleAttachmentChange}
-                      className="hidden"
-                      multiple
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    />
-
-                    {attachments.length > 0 && (
-                      <div className="space-y-2 bg-surface-container-low p-3 rounded-2xl border border-outline-variant/10">
-                        {attachments.map((file, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-outline-variant/5 shadow-sm text-sm">
-                            <span className="font-medium truncate max-w-[80%]">{file.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeAttachment(idx)}
-                              className="text-error hover:bg-error/10 p-1 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-3 pt-4">
-                    <button type="button" onClick={() => setIsAddingJob(false)} className="flex-1 py-3 px-4 bg-surface-container-highest text-on-surface rounded-xl font-bold hover:bg-surface-container transition-all">Cancelar</button>
-                    <button type="submit" className="flex-1 py-3 px-4 bg-primary text-on-primary rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all">Publicar Vaga</button>
-                  </div>
-                </form>
+                <JobForm
+                  mode="admin"
+                  showHeader={false}
+                  isSubmitting={isSubmittingJob}
+                  submitLabel="Publicar Vaga"
+                  onCancel={() => setIsAddingJob(false)}
+                  onSubmit={async (values: JobFormValues) => {
+                    setIsSubmittingJob(true);
+                    try {
+                      await addJob({
+                        title: values.title,
+                        company: values.company,
+                        email: values.email,
+                        phone: values.phone,
+                        site_url: values.site_url,
+                        location: values.location,
+                        type: values.type,
+                        area: values.area,
+                        salary: values.salary,
+                        description: values.description,
+                        requirements: values.requirements,
+                        attachment_url: values.attachment_url,
+                        logo_url: values.logo_url,
+                      });
+                    } finally {
+                      setIsSubmittingJob(false);
+                    }
+                  }}
+                />
               </motion.div>
             </div>
           )}
