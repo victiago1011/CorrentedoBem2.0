@@ -170,9 +170,31 @@ export default function NewTestimonial() {
       setTimeout(() => {
         router.push('/');
       }, 5000);
-    } catch (error) {
-      console.error('Error submitting testimonial:', error);
-      alert('Erro ao enviar depoimento. Tente novamente mais tarde.');
+    } catch (error: unknown) {
+      const supabaseError = error as {
+        message?: string;
+        code?: string;
+        details?: string;
+        hint?: string;
+      };
+
+      console.error('Erro detalhado do Supabase (Depoimentos):', {
+        message: supabaseError?.message ?? null,
+        code: supabaseError?.code ?? null,
+        details: supabaseError?.details ?? null,
+        hint: supabaseError?.hint ?? null,
+      });
+
+      const errorCode =
+        typeof supabaseError?.code === 'string' && supabaseError.code.trim()
+          ? supabaseError.code.trim()
+          : null;
+
+      alert(
+        errorCode
+          ? `Não foi possível enviar o depoimento. Tente novamente. Código: ${errorCode}`
+          : 'Não foi possível enviar o depoimento. Tente novamente.'
+      );
     } finally {
       setIsSubmitting(false);
     }
