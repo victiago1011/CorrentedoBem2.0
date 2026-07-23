@@ -514,6 +514,16 @@ export default function Dashboard() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchErrors, setFetchErrors] = useState<{
+    jobs?: string;
+    candidates?: string;
+    negocios?: string;
+    noticias?: string;
+    testimonials?: string;
+    history?: string;
+    settings?: string;
+  }>({});
+  const fetchGenerationRef = React.useRef(0);
   
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -764,9 +774,29 @@ export default function Dashboard() {
     );
   };
 
+  const renderDataFetchError = (message?: string) => {
+    if (!message || isLoading) return null;
+
+    return (
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <p className="font-medium">{message} Os dados anteriores foram mantidos quando disponíveis.</p>
+        <button
+          type="button"
+          onClick={() => fetchData()}
+          disabled={isLoading}
+          className="shrink-0 px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold transition-all active:scale-95 disabled:opacity-60"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    );
+  };
+
   // Fetch Data
   const fetchData = React.useCallback(async () => {
+    const requestId = ++fetchGenerationRef.current;
     setIsLoading(true);
+
     try {
       const [jobsRes, candidatesRes, negociosRes, noticiasRes, testimonialsRes, historyRes, settingsRes] = await Promise.all([
         supabase.from('vagas').select('*').order('created_at', { ascending: false }),
@@ -778,18 +808,98 @@ export default function Dashboard() {
         supabase.from('settings').select('*').maybeSingle(),
       ]);
 
-      if (jobsRes.data) setJobs(jobsRes.data);
-      if (candidatesRes.data) setCandidates(candidatesRes.data);
-      if (negociosRes.data) setNegocios(negociosRes.data);
-      if (noticiasRes.data) setNoticias(noticiasRes.data);
-      if (testimonialsRes.data) setTestimonials(testimonialsRes.data);
-      if (historyRes.data) setHistory(historyRes.data);
-      if (settingsRes.data) setSettings(settingsRes.data);
+      // Ignora respostas antigas se uma nova chamada já foi iniciada
+      if (requestId !== fetchGenerationRef.current) return;
+
+      const nextErrors: {
+        jobs?: string;
+        candidates?: string;
+        negocios?: string;
+        noticias?: string;
+        testimonials?: string;
+        history?: string;
+        settings?: string;
+      } = {};
+
+      const logFetchError = (resource: string, error: { code?: string; message?: string; details?: string }) => {
+        console.error(`Erro ao carregar ${resource}:`, {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        });
+      };
+
+      if (jobsRes.error) {
+        logFetchError('vagas', jobsRes.error);
+        nextErrors.jobs = 'Não foi possível carregar as vagas.';
+      } else if (jobsRes.data) {
+        setJobs(jobsRes.data);
+      }
+
+      if (candidatesRes.error) {
+        logFetchError('talentos', candidatesRes.error);
+        nextErrors.candidates = 'Não foi possível carregar os currículos.';
+      } else if (candidatesRes.data) {
+        setCandidates(candidatesRes.data);
+      }
+
+      if (negociosRes.error) {
+        logFetchError('negocios', negociosRes.error);
+        nextErrors.negocios = 'Não foi possível carregar os negócios.';
+      } else if (negociosRes.data) {
+        setNegocios(negociosRes.data);
+      }
+
+      if (noticiasRes.error) {
+        logFetchError('noticias', noticiasRes.error);
+        nextErrors.noticias = 'Não foi possível carregar as notícias.';
+      } else if (noticiasRes.data) {
+        setNoticias(noticiasRes.data);
+      }
+
+      if (testimonialsRes.error) {
+        logFetchError('testimonials', testimonialsRes.error);
+        nextErrors.testimonials = 'Não foi possível carregar os depoimentos.';
+      } else if (testimonialsRes.data) {
+        setTestimonials(testimonialsRes.data);
+      }
+
+      if (historyRes.error) {
+        logFetchError('history', historyRes.error);
+        nextErrors.history = 'Não foi possível carregar o histórico.';
+      } else if (historyRes.data) {
+        setHistory(historyRes.data);
+      }
+
+      if (settingsRes.error) {
+        logFetchError('settings', settingsRes.error);
+        nextErrors.settings = 'Não foi possível carregar as configurações.';
+      } else if (settingsRes.data) {
+        setSettings(settingsRes.data);
+      }
+
+      setFetchErrors(nextErrors);
+
+      if (Object.keys(nextErrors).length > 0) {
+        triggerToast('Erro ao carregar alguns dados. Tente novamente.', 'error');
+      }
     } catch (error) {
-      console.error('Error fetching data:', error);
-      triggerToast('Erro ao carregar dados', 'error');
+      if (requestId !== fetchGenerationRef.current) return;
+      console.error('Error fetching data:', error instanceof Error ? { message: error.message, name: error.name } : { message: 'unknown' });
+      setFetchErrors({
+        jobs: 'Não foi possível carregar as vagas.',
+        candidates: 'Não foi possível carregar os currículos.',
+        negocios: 'Não foi possível carregar os negócios.',
+        noticias: 'Não foi possível carregar as notícias.',
+        testimonials: 'Não foi possível carregar os depoimentos.',
+        history: 'Não foi possível carregar o histórico.',
+        settings: 'Não foi possível carregar as configurações.',
+      });
+      triggerToast('Erro ao carregar dados. Tente novamente.', 'error');
     } finally {
-      setIsLoading(false);
+      if (requestId === fetchGenerationRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -1888,6 +1998,7 @@ export default function Dashboard() {
                 className="space-y-8"
               >
                 {renderPendingTabs()}
+                {renderDataFetchError(fetchErrors.jobs)}
 
                 <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-outline-variant/10 overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[600px]">
@@ -1963,9 +2074,9 @@ export default function Dashboard() {
                           </td>
                         </tr>
                       ))}
-                      {jobs.filter(j => j.status === 'pending').length === 0 && (
+                      {jobs.filter(j => j.status === 'pending').length === 0 && !isLoading && !fetchErrors.jobs && (
                         <tr>
-                          <td colSpan={4} className="px-6 py-10 text-center text-on-surface-variant">
+                          <td colSpan={5} className="px-6 py-10 text-center text-on-surface-variant">
                             Nenhuma vaga pendente no momento.
                           </td>
                         </tr>
@@ -2084,6 +2195,7 @@ export default function Dashboard() {
                 className="space-y-8"
               >
                 {renderPendingTabs()}
+                {renderDataFetchError(fetchErrors.candidates)}
 
                 <div className="bg-white rounded-2xl p-2 shadow-sm border border-outline-variant/10 overflow-x-auto">
                   <table className="w-full text-left border-separate border-spacing-y-2 px-2 min-w-[600px]">
@@ -2128,7 +2240,7 @@ export default function Dashboard() {
                           </td>
                         </tr>
                       ))}
-                      {candidates.filter(c => c.status === 'pending').length === 0 && (
+                      {candidates.filter(c => c.status === 'pending').length === 0 && !isLoading && !fetchErrors.candidates && (
                         <tr>
                           <td colSpan={4} className="px-4 py-10 text-center text-on-surface-variant">
                             Nenhum currículo pendente no momento.
@@ -2148,6 +2260,7 @@ export default function Dashboard() {
                 className="space-y-8"
               >
                 {renderPendingTabs()}
+                {renderDataFetchError(fetchErrors.negocios)}
 
                 <div className="bg-white rounded-2xl p-2 shadow-sm border border-outline-variant/10 overflow-x-auto">
                   <table className="w-full text-left border-separate border-spacing-y-2 px-2 min-w-[600px]">
@@ -2201,7 +2314,7 @@ export default function Dashboard() {
                           </td>
                         </tr>
                       ))}
-                      {negocios.filter(n => n.status === 'pending').length === 0 && (
+                      {negocios.filter(n => n.status === 'pending').length === 0 && !isLoading && !fetchErrors.negocios && (
                         <tr>
                           <td colSpan={4} className="px-4 py-10 text-center text-on-surface-variant">
                             Nenhum negócio pendente no momento.
@@ -2221,6 +2334,7 @@ export default function Dashboard() {
                 className="space-y-8"
               >
                 {renderPendingTabs()}
+                {renderDataFetchError(fetchErrors.testimonials)}
 
                 <div className="grid grid-cols-1 gap-6">
                   {testimonials.filter(t => t.status === 'pending').map((t) => (
@@ -2278,7 +2392,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ))}
-                  {testimonials.filter(t => t.status === 'pending').length === 0 && (
+                  {testimonials.filter(t => t.status === 'pending').length === 0 && !isLoading && !fetchErrors.testimonials && (
                     <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-outline-variant/30">
                        <Quote className="w-12 h-12 text-outline-variant mx-auto mb-4 opacity-50" />
                        <p className="text-on-surface-variant font-bold">Nenhum depoimento aguardando aprovação.</p>
