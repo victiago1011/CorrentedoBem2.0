@@ -179,11 +179,36 @@ interface Candidate {
   role: string;
   summary: string;
   skills: string[];
-  image: string;
+  image?: string;
   cv_url?: string;
   verified?: boolean;
   created_at?: string;
 }
+
+const TALENT_LIST_FIELDS = 'id, name, email, phone, location, area, role, summary, skills, status, verified, created_at';
+const GALLERY_PAGE_SIZE = 8;
+
+const sanitizeTalentSearchTerm = (raw: string) =>
+  raw
+    .trim()
+    .replace(/[%_,.()"'\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const toTalentListItem = (row: Candidate): Candidate => {
+  const rest = { ...row };
+  delete rest.image;
+  delete rest.cv_url;
+  return {
+    ...rest,
+    skills: Array.isArray(rest.skills) ? rest.skills : [],
+  };
+};
+
+const normalizeTalentRecord = (row: Candidate): Candidate => ({
+  ...row,
+  skills: Array.isArray(row.skills) ? row.skills : [],
+});
 
 interface Negocio {
   id: string | number;
@@ -509,6 +534,13 @@ export default function Dashboard() {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [galleryTalents, setGalleryTalents] = useState<Candidate[]>([]);
+  const [galleryPage, setGalleryPage] = useState(1);
+  const [galleryTotalCount, setGalleryTotalCount] = useState(0);
+  const [isLoadingGallery, setIsLoadingGallery] = useState(false);
+  const [rejectedCandidates, setRejectedCandidates] = useState<Candidate[]>([]);
+  const [isLoadingRejected, setIsLoadingRejected] = useState(false);
+  const [loadingTalentId, setLoadingTalentId] = useState<string | number | null>(null);
   const [negocios, setNegocios] = useState<Negocio[]>([]);
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
@@ -517,6 +549,8 @@ export default function Dashboard() {
   const [fetchErrors, setFetchErrors] = useState<{
     jobs?: string;
     candidates?: string;
+    gallery?: string;
+    rejected?: string;
     negocios?: string;
     noticias?: string;
     testimonials?: string;
@@ -524,6 +558,10 @@ export default function Dashboard() {
     settings?: string;
   }>({});
   const fetchGenerationRef = React.useRef(0);
+  const galleryFetchRef = React.useRef(0);
+  const rejectedFetchRef = React.useRef(0);
+  const talentDetailFetchRef = React.useRef(0);
+  const prevTalentSearchRef = React.useRef('');
   
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -774,7 +812,7 @@ export default function Dashboard() {
     );
   };
 
-  const renderDataFetchError = (message?: string) => {
+  const renderDataFetchError = (message?: string, onRetry?: () => void) => {
     if (!message || isLoading) return null;
 
     return (
@@ -782,7 +820,7 @@ export default function Dashboard() {
         <p className="font-medium">{message} Os dados anteriores foram mantidos quando disponíveis.</p>
         <button
           type="button"
-          onClick={() => fetchData()}
+          onClick={() => (onRetry ? onRetry() : fetchData())}
           disabled={isLoading}
           className="shrink-0 px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold transition-all active:scale-95 disabled:opacity-60"
         >
@@ -792,6 +830,195 @@ export default function Dashboard() {
     );
   };
 
+  const findCandidateById = React.useCallback((id: string | number) => {
+    const match = (c: Candidate) => String(c.id) === String(id);
+    return (
+      candidates.find(match) ||
+      galleryTalents.find(match) ||
+      rejectedCandidates.find(match) ||
+      (selectedCandidate && match(selectedCandidate) ? selectedCandidate : null) ||
+      (editingCandidate && match(editingCandidate) ? editingCandidate : null) ||
+      null
+    );
+  }, [candidates, galleryTalents, rejectedCandidates, selectedCandidate, editingCandidate]);
+
+  const fetchGalleryTalents = React.useCallback(async (search: string, category: string, page: number) => {
+    const requestId = ++galleryFetchRef.current;
+    setIsLoadingGallery(true);
+
+    const from = (page - 1) * GALLERY_PAGE_SIZE;
+    const to = from + GALLERY_PAGE_SIZE - 1;
+
+    try {
+      let query = supabase
+        .from('talentos')
+        .select(TALENT_LIST_FIELDS, { count: 'exact' })
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      const term = sanitizeTalentSearchTerm(search);
+      const searchOr = term
+        ? `name.ilike.%${term}%,role.ilike.%${term}%,area.ilike.%${term}%,summary.ilike.%${term}%,skills.cs.{"${term}"}`
+        : '';
+
+      if (category === 'Tecnologia') {
+        if (searchOr) {
+          query = query.or(`and(area.ilike.%Tecnologia%,or(${searchOr})),and(area.ilike.%Desenvolvimento%,or(${searchOr}))`);
+        } else {
+          query = query.or('area.ilike.%Tecnologia%,area.ilike.%Desenvolvimento%');
+        }
+      } else {
+        if (searchOr) {
+          query = query.or(searchOr);
+        }
+        if (category && category !== 'Todos os Talentos') {
+          query = query.ilike('area', `%${sanitizeTalentSearchTerm(category)}%`);
+        }
+      }
+
+      const { data, error, count } = await query.range(from, to);
+
+      if (requestId !== galleryFetchRef.current) return;
+
+      if (error) {
+        console.error('Erro ao carregar galeria de talentos:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        });
+        setFetchErrors(prev => ({ ...prev, gallery: 'Não foi possível carregar a galeria de talentos.' }));
+        return;
+      }
+
+      const rows = (data || []).map((row) => toTalentListItem(row as Candidate));
+
+      if (rows.length === 0 && page > 1) {
+        setGalleryPage(1);
+        return;
+      }
+
+      setGalleryTalents(rows);
+      setGalleryTotalCount(count || 0);
+      setFetchErrors(prev => {
+        if (!prev.gallery) return prev;
+        const next = { ...prev };
+        delete next.gallery;
+        return next;
+      });
+    } catch (error) {
+      if (requestId !== galleryFetchRef.current) return;
+      console.error('Erro ao carregar galeria de talentos:', error);
+      setFetchErrors(prev => ({ ...prev, gallery: 'Não foi possível carregar a galeria de talentos.' }));
+    } finally {
+      if (requestId === galleryFetchRef.current) {
+        setIsLoadingGallery(false);
+      }
+    }
+  }, []);
+
+  const fetchRejectedTalents = React.useCallback(async () => {
+    const requestId = ++rejectedFetchRef.current;
+    setIsLoadingRejected(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('talentos')
+        .select(TALENT_LIST_FIELDS)
+        .eq('status', 'rejected')
+        .order('created_at', { ascending: false });
+
+      if (requestId !== rejectedFetchRef.current) return;
+
+      if (error) {
+        console.error('Erro ao carregar talentos recusados:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        });
+        setFetchErrors(prev => ({ ...prev, rejected: 'Não foi possível carregar os currículos recusados.' }));
+        return;
+      }
+
+      setRejectedCandidates((data || []).map((row) => toTalentListItem(row as Candidate)));
+      setFetchErrors(prev => {
+        if (!prev.rejected) return prev;
+        const next = { ...prev };
+        delete next.rejected;
+        return next;
+      });
+    } catch (error) {
+      if (requestId !== rejectedFetchRef.current) return;
+      console.error('Erro ao carregar talentos recusados:', error);
+      setFetchErrors(prev => ({ ...prev, rejected: 'Não foi possível carregar os currículos recusados.' }));
+    } finally {
+      if (requestId === rejectedFetchRef.current) {
+        setIsLoadingRejected(false);
+      }
+    }
+  }, []);
+
+  const openCandidateDetail = React.useCallback(async (id: string | number) => {
+    const requestId = ++talentDetailFetchRef.current;
+    setLoadingTalentId(id);
+
+    try {
+      const { data, error } = await supabase
+        .from('talentos')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (requestId !== talentDetailFetchRef.current) return;
+
+      if (error || !data) {
+        console.error('Erro ao carregar currículo:', error);
+        triggerToast('Não foi possível carregar o currículo.', 'error');
+        return;
+      }
+
+      setSelectedCandidate(normalizeTalentRecord(data as Candidate));
+    } catch (error) {
+      if (requestId !== talentDetailFetchRef.current) return;
+      console.error('Erro ao carregar currículo:', error);
+      triggerToast('Não foi possível carregar o currículo.', 'error');
+    } finally {
+      if (requestId === talentDetailFetchRef.current) {
+        setLoadingTalentId(null);
+      }
+    }
+  }, []);
+
+  const openCandidateEditor = React.useCallback(async (id: string | number) => {
+    const requestId = ++talentDetailFetchRef.current;
+    setLoadingTalentId(id);
+
+    try {
+      const { data, error } = await supabase
+        .from('talentos')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (requestId !== talentDetailFetchRef.current) return;
+
+      if (error || !data) {
+        console.error('Erro ao carregar talento para edição:', error);
+        triggerToast('Não foi possível carregar o talento para edição.', 'error');
+        return;
+      }
+
+      setEditingCandidate(normalizeTalentRecord(data as Candidate));
+    } catch (error) {
+      if (requestId !== talentDetailFetchRef.current) return;
+      console.error('Erro ao carregar talento para edição:', error);
+      triggerToast('Não foi possível carregar o talento para edição.', 'error');
+    } finally {
+      if (requestId === talentDetailFetchRef.current) {
+        setLoadingTalentId(null);
+      }
+    }
+  }, []);
+
   // Fetch Data
   const fetchData = React.useCallback(async () => {
     const requestId = ++fetchGenerationRef.current;
@@ -800,7 +1027,7 @@ export default function Dashboard() {
     try {
       const [jobsRes, candidatesRes, negociosRes, noticiasRes, testimonialsRes, historyRes, settingsRes] = await Promise.all([
         supabase.from('vagas').select('*').order('created_at', { ascending: false }),
-        supabase.from('talentos').select('*').order('created_at', { ascending: false }),
+        supabase.from('talentos').select(TALENT_LIST_FIELDS).eq('status', 'pending').order('created_at', { ascending: false }),
         supabase.from('negocios').select('*').order('created_at', { ascending: false }),
         supabase.from('noticias').select('*').order('created_at', { ascending: false }),
         supabase.from('testimonials').select('*').order('created_at', { ascending: false }),
@@ -840,7 +1067,7 @@ export default function Dashboard() {
         logFetchError('talentos', candidatesRes.error);
         nextErrors.candidates = 'Não foi possível carregar os currículos.';
       } else if (candidatesRes.data) {
-        setCandidates(candidatesRes.data);
+        setCandidates(candidatesRes.data.map((row) => toTalentListItem(row as Candidate)));
       }
 
       if (negociosRes.error) {
@@ -878,7 +1105,11 @@ export default function Dashboard() {
         setSettings(settingsRes.data);
       }
 
-      setFetchErrors(nextErrors);
+      setFetchErrors(prev => ({
+        ...nextErrors,
+        gallery: prev.gallery,
+        rejected: prev.rejected,
+      }));
 
       if (Object.keys(nextErrors).length > 0) {
         triggerToast('Erro ao carregar alguns dados. Tente novamente.', 'error');
@@ -886,7 +1117,7 @@ export default function Dashboard() {
     } catch (error) {
       if (requestId !== fetchGenerationRef.current) return;
       console.error('Error fetching data:', error instanceof Error ? { message: error.message, name: error.name } : { message: 'unknown' });
-      setFetchErrors({
+      setFetchErrors(prev => ({
         jobs: 'Não foi possível carregar as vagas.',
         candidates: 'Não foi possível carregar os currículos.',
         negocios: 'Não foi possível carregar os negócios.',
@@ -894,7 +1125,9 @@ export default function Dashboard() {
         testimonials: 'Não foi possível carregar os depoimentos.',
         history: 'Não foi possível carregar o histórico.',
         settings: 'Não foi possível carregar as configurações.',
-      });
+        gallery: prev.gallery,
+        rejected: prev.rejected,
+      }));
       triggerToast('Erro ao carregar dados. Tente novamente.', 'error');
     } finally {
       if (requestId === fetchGenerationRef.current) {
@@ -915,6 +1148,25 @@ export default function Dashboard() {
     };
     checkAuth();
   }, [router, fetchData]);
+
+  useEffect(() => {
+    if (activeView !== 'galeria') return;
+
+    const searchChanged = prevTalentSearchRef.current !== talentSearch;
+    prevTalentSearchRef.current = talentSearch;
+    const delay = searchChanged ? 300 : 0;
+
+    const timeoutId = window.setTimeout(() => {
+      void fetchGalleryTalents(talentSearch, talentCategory, galleryPage);
+    }, delay);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeView, talentSearch, talentCategory, galleryPage, fetchGalleryTalents]);
+
+  useEffect(() => {
+    if (activeView !== 'recusados') return;
+    void fetchRejectedTalents();
+  }, [activeView, fetchRejectedTalents]);
 
   const approveJob = React.useCallback(async (id: string | number) => {
     const job = jobs.find(j => String(j.id) === String(id));
@@ -1055,17 +1307,20 @@ export default function Dashboard() {
   }, [jobs]);
 
   const approveCandidate = React.useCallback(async (id: string | number) => {
-    const cand = candidates.find(c => String(c.id) === String(id));
+    const cand = findCandidateById(id);
     if (!cand) return;
 
     const { data, error } = await supabase
       .from('talentos')
       .update({ status: 'active' })
       .eq('id', id)
-      .select();
+      .select(TALENT_LIST_FIELDS);
 
     if (!error && data && data.length > 0) {
-      setCandidates(prev => prev.map(c => String(c.id) === String(id) ? { ...c, status: 'active' } : c));
+      const light = toTalentListItem(data[0] as Candidate);
+      setCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
+      setRejectedCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
+      setGalleryTalents(prev => prev.map(c => String(c.id) === String(id) ? { ...c, ...light, status: 'active' } : c));
       triggerToast('Currículo aprovado!');
 
       const email = cand.email;
@@ -1107,10 +1362,10 @@ export default function Dashboard() {
     } else {
       triggerToast(error ? `Erro: ${error.message}` : 'Erro: Currículo não encontrado ou RLS bloqueou.', 'error');
     }
-  }, [candidates]);
+  }, [findCandidateById]);
 
   const rejectCandidate = React.useCallback(async (id: string | number) => {
-    const cand = candidates.find(c => String(c.id) === String(id));
+    const cand = findCandidateById(id);
     if (!cand) return;
 
     const email = cand.email;
@@ -1119,10 +1374,18 @@ export default function Dashboard() {
       .from('talentos')
       .update({ status: 'rejected' })
       .eq('id', id)
-      .select();
+      .select(TALENT_LIST_FIELDS);
 
     if (!error && data && data.length > 0) {
-      setCandidates(prev => prev.map(c => String(c.id) === String(id) ? { ...c, status: 'rejected' } : c));
+      const light = toTalentListItem({ ...(data[0] as Candidate), status: 'rejected' });
+      setCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
+      setGalleryTalents(prev => prev.filter(c => String(c.id) !== String(id)));
+      setRejectedCandidates(prev => {
+        if (prev.some(c => String(c.id) === String(id))) {
+          return prev.map(c => String(c.id) === String(id) ? { ...c, ...light } : c);
+        }
+        return [light, ...prev];
+      });
       triggerToast('Currículo recusado.');
 
       if (isNotifyChecked && email) {
@@ -1164,7 +1427,7 @@ export default function Dashboard() {
     } else {
       triggerToast(error ? `Erro: ${error.message}` : 'Erro ao recusar currículo.', 'error');
     }
-  }, [candidates, isNotifyChecked, rejectionJustification]);
+  }, [findCandidateById, isNotifyChecked, rejectionJustification]);
 
   const approveTestimonial = React.useCallback(async (id: string | number) => {
     const testimonial = testimonials.find(t => String(t.id) === String(id));
@@ -1448,11 +1711,17 @@ export default function Dashboard() {
     const { data, error } = await supabase
       .from('talentos')
       .insert([candData])
-      .select()
+      .select(TALENT_LIST_FIELDS)
       .single();
 
     if (data && !error) {
-      setCandidates(prev => [data, ...prev]);
+      if (activeView === 'galeria') {
+        if (galleryPage !== 1) {
+          setGalleryPage(1);
+        } else {
+          void fetchGalleryTalents(talentSearch, talentCategory, 1);
+        }
+      }
       setIsAddingCandidate(false);
       triggerToast('Currículo cadastrado com sucesso!', 'success');
       
@@ -1637,7 +1906,7 @@ export default function Dashboard() {
   }, []);
 
   const deleteCandidate = React.useCallback(async (id: string | number) => {
-    const cand = candidates.find(c => String(c.id) === String(id));
+    const cand = findCandidateById(id);
     if (!cand) return;
 
     const { error } = await supabase
@@ -1647,6 +1916,10 @@ export default function Dashboard() {
 
     if (!error) {
       setCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
+      setGalleryTalents(prev => prev.filter(c => String(c.id) !== String(id)));
+      setRejectedCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
+      setSelectedCandidate(prev => (prev && String(prev.id) === String(id) ? null : prev));
+      setEditingCandidate(prev => (prev && String(prev.id) === String(id) ? null : prev));
       triggerToast('Currículo removido.');
       setConfirmAction(null);
       
@@ -1659,7 +1932,7 @@ export default function Dashboard() {
     } else {
       triggerToast(`Erro ao deletar: ${error.message}`, 'error');
     }
-  }, [candidates]);
+  }, [findCandidateById]);
 
   const updateCandidate = React.useCallback(async (updatedCand: Candidate) => {
     const { data, error } = await supabase
@@ -1673,11 +1946,23 @@ export default function Dashboard() {
         skills: updatedCand.skills,
       })
       .eq('id', updatedCand.id)
-      .select()
+      .select(TALENT_LIST_FIELDS)
       .single();
 
     if (data && !error) {
-      setCandidates(prev => prev.map(c => String(c.id) === String(data.id) ? data : c));
+      const light = toTalentListItem(data as Candidate);
+      setCandidates(prev => prev.map(c => String(c.id) === String(light.id) ? { ...c, ...light } : c));
+      setGalleryTalents(prev => prev.map(c => String(c.id) === String(light.id) ? { ...c, ...light } : c));
+      setRejectedCandidates(prev => prev.map(c => String(c.id) === String(light.id) ? { ...c, ...light } : c));
+      setSelectedCandidate(prev => {
+        if (!prev || String(prev.id) !== String(light.id)) return prev;
+        return {
+          ...prev,
+          ...light,
+          image: prev.image,
+          cv_url: prev.cv_url,
+        };
+      });
       setEditingCandidate(null);
       setConfirmAction(null);
       
@@ -2211,7 +2496,7 @@ export default function Dashboard() {
                       {candidates.filter(c => c.status === 'pending').map((c) => (
                         <tr 
                           key={c.id}
-                          onClick={() => setSelectedCandidate(c)}
+                          onClick={() => openCandidateDetail(c.id)}
                           className={cn(
                             "group hover:bg-surface-container-low transition-all cursor-pointer rounded-xl",
                             selectedCandidate?.id === c.id ? "bg-surface-container-low" : "bg-surface-container-low/30"
@@ -2220,7 +2505,13 @@ export default function Dashboard() {
                           <td className="px-4 py-4 rounded-l-xl">
                             <div className="flex items-center gap-3">
                               <div className="relative w-10 h-10 rounded-lg overflow-hidden shadow-sm">
-                                <CandidateAvatar src={c.image} name={c.name} />
+                                {loadingTalentId === c.id ? (
+                                  <div className="w-full h-full bg-[#f6f3f2] flex items-center justify-center">
+                                    <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                                  </div>
+                                ) : (
+                                  <CandidateAvatar src={c.image} name={c.name} />
+                                )}
                               </div>
                               <div>
                                 <p className="font-bold text-on-surface">{c.name}</p>
@@ -2674,6 +2965,7 @@ export default function Dashboard() {
                   <h1 className="text-3xl font-extrabold text-error tracking-tight font-headline">Itens Recusados</h1>
                   <p className="text-on-surface-variant mt-1">Visualize vagas e candidatos que não foram aprovados.</p>
                 </header>
+                {renderDataFetchError(fetchErrors.rejected, fetchRejectedTalents)}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <section className="space-y-4">
@@ -2708,7 +3000,7 @@ export default function Dashboard() {
                       Candidatos Recusados
                     </h2>
                     <div className="space-y-3">
-                      {candidates.filter(c => c.status === 'rejected').map(cand => (
+                      {rejectedCandidates.map(cand => (
                         <div key={cand.id} className="p-4 bg-white rounded-2xl border border-outline-variant/10 shadow-sm flex justify-between items-center">
                           <div className="flex items-center gap-3">
                             <div className="relative w-8 h-8 rounded-lg overflow-hidden">
@@ -2727,7 +3019,10 @@ export default function Dashboard() {
                           </button>
                         </div>
                       ))}
-                      {candidates.filter(c => c.status === 'rejected').length === 0 && (
+                      {isLoadingRejected && rejectedCandidates.length === 0 && (
+                        <p className="text-sm text-on-surface-variant italic">Carregando currículos recusados...</p>
+                      )}
+                      {!isLoadingRejected && rejectedCandidates.length === 0 && (
                         <p className="text-sm text-on-surface-variant italic">Nenhum candidato recusado.</p>
                       )}
                     </div>
@@ -2819,7 +3114,10 @@ export default function Dashboard() {
                       <input 
                         type="text" 
                         value={talentSearch}
-                        onChange={(e) => setTalentSearch(e.target.value)}
+                        onChange={(e) => {
+                          setTalentSearch(e.target.value);
+                          setGalleryPage(1);
+                        }}
                         placeholder="Buscar por nome ou competência..." 
                         className="w-full pl-12 pr-4 py-4 rounded-2xl border-none bg-surface-container-highest focus:bg-white focus:ring-2 focus:ring-primary/40 transition-all shadow-sm"
                       />
@@ -2831,7 +3129,10 @@ export default function Dashboard() {
                   {['Todos os Talentos', 'Tecnologia', 'Saúde', 'Finanças', 'Engenharia', 'Outros Serviços'].map((cat) => (
                     <button 
                       key={cat}
-                      onClick={() => setTalentCategory(cat)}
+                      onClick={() => {
+                        setTalentCategory(cat);
+                        setGalleryPage(1);
+                      }}
                       className={cn(
                         "px-6 py-3 rounded-full font-semibold whitespace-nowrap transition-all",
                         talentCategory === cat ? "bg-primary text-on-primary shadow-lg shadow-primary/20" : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest"
@@ -2874,16 +3175,27 @@ export default function Dashboard() {
                     </div>
                   </aside>
 
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                    {candidates
-                      .filter(c => c.status === 'active')
-                      .filter(c => talentCategory === 'Todos os Talentos' || c.area.includes(talentCategory) || (talentCategory === 'Tecnologia' && c.area.includes('Desenvolvimento')))
-                      .filter(c => c.name.toLowerCase().includes(talentSearch.toLowerCase()) || c.skills.some(s => s.toLowerCase().includes(talentSearch.toLowerCase())))
-                      .map((cand) => (
+                  <div className="flex-1 space-y-6">
+                    {renderDataFetchError(fetchErrors.gallery, () => fetchGalleryTalents(talentSearch, talentCategory, galleryPage))}
+                    <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 items-start min-h-[200px]">
+                    {isLoadingGallery && (
+                      <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-3xl">
+                        <div className="flex flex-col items-center gap-3">
+                          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                          <p className="text-xs font-bold text-primary uppercase tracking-widest">Carregando talentos...</p>
+                        </div>
+                      </div>
+                    )}
+                    {galleryTalents.map((cand) => (
                       <div key={cand.id} className="bg-surface-container-low rounded-3xl p-6 hover:bg-white transition-all duration-300 border border-outline-variant/10 group relative flex flex-col">
+                        {loadingTalentId === cand.id && (
+                          <div className="absolute inset-0 bg-white/70 z-20 flex items-center justify-center rounded-3xl">
+                            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                          </div>
+                        )}
                         <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
-                            onClick={() => setEditingCandidate(cand)}
+                            onClick={() => openCandidateEditor(cand.id)}
                             className="p-2 bg-white rounded-full shadow-sm text-primary hover:bg-primary hover:text-white transition-all"
                           >
                             <Edit className="w-4 h-4" />
@@ -2917,7 +3229,7 @@ export default function Dashboard() {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              setSelectedCandidate(cand);
+                              void openCandidateDetail(cand.id);
                             }}
                             className="text-primary font-bold text-xs hover:underline decoration-2 underline-offset-4"
                           >
@@ -2926,9 +3238,35 @@ export default function Dashboard() {
                         </div>
                       </div>
                     ))}
-                    {candidates.filter(c => c.status === 'active').length === 0 && (
+                    {!isLoadingGallery && galleryTotalCount === 0 && !talentSearch && talentCategory === 'Todos os Talentos' && (
                       <div className="col-span-2 p-12 text-center text-on-surface-variant">
                         Nenhum talento aprovado na galeria ainda.
+                      </div>
+                    )}
+                    </div>
+                    {galleryTotalCount > GALLERY_PAGE_SIZE && (
+                      <div className="flex items-center justify-center gap-4 pt-2">
+                        <button
+                          type="button"
+                          disabled={galleryPage <= 1 || isLoadingGallery}
+                          onClick={() => setGalleryPage(prev => Math.max(1, prev - 1))}
+                          className="inline-flex items-center gap-1 px-4 py-2 rounded-xl bg-surface-container-high text-on-surface-variant text-sm font-bold disabled:opacity-40 hover:bg-surface-container-highest transition-all"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          Anterior
+                        </button>
+                        <span className="text-sm font-medium text-on-surface-variant">
+                          Página {galleryPage} de {Math.max(1, Math.ceil(galleryTotalCount / GALLERY_PAGE_SIZE))}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={galleryPage >= Math.ceil(galleryTotalCount / GALLERY_PAGE_SIZE) || isLoadingGallery}
+                          onClick={() => setGalleryPage(prev => prev + 1)}
+                          className="inline-flex items-center gap-1 px-4 py-2 rounded-xl bg-surface-container-high text-on-surface-variant text-sm font-bold disabled:opacity-40 hover:bg-surface-container-highest transition-all"
+                        >
+                          Próxima
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
                       </div>
                     )}
                   </div>
@@ -3847,7 +4185,7 @@ export default function Dashboard() {
                   <section>
                     <h4 className="text-xs font-bold uppercase tracking-widest text-secondary mb-3">Competências Principais</h4>
                     <div className="flex flex-wrap gap-2">
-                      {selectedCandidate.skills.map(s => (
+                      {(selectedCandidate.skills || []).map(s => (
                         <span key={s} className="px-3 py-1.5 bg-surface-container rounded-xl text-xs font-bold text-on-surface border border-outline-variant/10">{s}</span>
                       ))}
                     </div>
@@ -4474,7 +4812,7 @@ export default function Dashboard() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-on-surface-variant uppercase">Competências (separadas por vírgula)</label>
-                <textarea name="skills" defaultValue={editingCandidate.skills.join(', ')} rows={2} className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none"></textarea>
+                <textarea name="skills" defaultValue={(editingCandidate.skills || []).join(', ')} rows={2} className="w-full p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 focus:ring-2 focus:ring-primary/40 outline-none"></textarea>
               </div>
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={() => setEditingCandidate(null)} className="flex-1 py-3 px-4 bg-surface-container-highest text-on-surface rounded-xl font-bold hover:bg-surface-container transition-all">Cancelar</button>
@@ -4965,7 +5303,7 @@ export default function Dashboard() {
             return jobs.find(j => String(j.id) === String(id))?.title || '';
           }
           if (target === 'candidate') {
-            return candidates.find(c => String(c.id) === String(id))?.name || '';
+            return findCandidateById(id)?.name || '';
           }
           if (target === 'negocio') {
             return negocios.find(n => String(n.id) === String(id))?.title || '';
@@ -4983,7 +5321,7 @@ export default function Dashboard() {
             return job?.contact_email || job?.email || null;
           }
           if (target === 'candidate') {
-            return candidates.find(c => String(c.id) === String(id))?.email || null;
+            return findCandidateById(id)?.email || null;
           }
           if (target === 'negocio') {
             return negocios.find(n => String(n.id) === String(id))?.contact_email || null;
