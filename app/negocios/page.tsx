@@ -111,7 +111,7 @@ function NegociosContent() {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('negocios')
-        .select('*')
+        .select('id, title, owner_name, location, area, description, link, contact_email, contact_phone, type, logo_url, attachment_url, status, created_at, expires_at')
         .eq('status', 'active')
         .or(publicUnexpiredOrFilter())
         .order('created_at', { ascending: false });

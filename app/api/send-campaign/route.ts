@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { supabase } from '@/lib/supabase';
 import { requireAdmin } from '@/lib/require-admin';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import {
   fetchAllNewsletterSubscribers,
   isValidEmail,
@@ -127,6 +127,8 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) {
       return auth.response;
     }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     const {
       subject,
@@ -411,7 +413,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('newsletter_subscribers')
         .select('id, nome, email')
         .in('id', selectedIds)
@@ -435,7 +437,7 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
-      subscribers = await fetchAllNewsletterSubscribers(supabase, {
+      subscribers = await fetchAllNewsletterSubscribers(supabaseAdmin, {
         activeOnly: true,
         columns: 'id, nome, email',
       });
@@ -472,9 +474,6 @@ export async function POST(req: NextRequest) {
         message: `Nenhum e-mail válido encontrado entre os ${recipientsCount} contatos selecionados/ativos.`,
       });
     }
-
-    const { getSupabaseAdmin } = await import('@/lib/supabase-admin');
-    const supabaseAdmin = getSupabaseAdmin();
 
     campaignId = randomUUID();
 
@@ -586,7 +585,7 @@ export async function POST(req: NextRequest) {
     const errorDetails = batchErrors.length > 0 ? batchErrors.slice(0, 3).join(' | ') : undefined;
     const modeLabel = isSelectedRequest ? 'selecionados' : 'todos os ativos';
 
-    await supabase.from('history').insert({
+    await supabaseAdmin.from('history').insert({
       action: 'Campanha de E-mail Enviada',
       details: `Campanha "${subject}" (${modeLabel}) enviada para ${successCount} destinatários válidos. Falhas no envio: ${failureCount}. Inválidos ignorados: ${invalidEmails.length}.${errorDetails ? ` Erros: ${errorDetails}` : ''}`,
     });
@@ -612,7 +611,6 @@ export async function POST(req: NextRequest) {
 
     if (campaignId) {
       try {
-        const { getSupabaseAdmin } = await import('@/lib/supabase-admin');
         const supabaseAdmin = getSupabaseAdmin();
         await supabaseAdmin
           .from('email_campaigns')

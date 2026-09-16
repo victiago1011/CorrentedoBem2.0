@@ -86,7 +86,7 @@ export default function NoticiaDetailPage() {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('noticias')
-        .select('*')
+        .select('id, title, slug, content, excerpt, image_url, attachment_url, author, category, status, published_at')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();

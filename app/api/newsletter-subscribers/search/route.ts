@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/require-admin';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 const SEARCH_LIMIT = 10;
 
@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
   const q = sanitizeSearchTerm(qRaw);
 
   try {
-    let query = supabase
+    const supabaseAdmin = getSupabaseAdmin();
+    let query = supabaseAdmin
       .from('newsletter_subscribers')
       .select('id, nome, email')
       .eq('ativo', true)

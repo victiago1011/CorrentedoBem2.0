@@ -83,7 +83,7 @@ export default function NoticiasPage() {
       // Use cached data if possible or just fetch once
       const { data, error } = await supabase
         .from('noticias')
-        .select('*')
+        .select('id, title, slug, content, excerpt, image_url, author, category, status, published_at')
         .eq('status', 'active')
         .order('published_at', { ascending: false });
 

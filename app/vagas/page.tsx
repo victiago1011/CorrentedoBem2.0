@@ -111,7 +111,7 @@ function VagasContent() {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('vagas')
-        .select('*')
+        .select('id, title, company, location, type, area, status, salary, description, requirements, logo_url, site_url, email, phone, attachment_url, created_at, verified')
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 

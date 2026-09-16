@@ -37,7 +37,7 @@ export default function TestimonialsPage() {
     const fetchTestimonials = async () => {
       const { data, error } = await supabase
         .from('testimonials')
-        .select('*')
+        .select('id, name, role, company, content, photo_url, created_at, status')
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
 

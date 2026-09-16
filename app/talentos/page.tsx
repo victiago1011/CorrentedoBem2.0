@@ -142,7 +142,7 @@ function TalentosContent() {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('talentos')
-        .select('*')
+        .select('id, name, email, phone, location, area, status, role, summary, skills, image, cv_url, verified, created_at, expires_at')
         .eq('status', 'active')
         .or(publicUnexpiredOrFilter())
         .order('created_at', { ascending: false });

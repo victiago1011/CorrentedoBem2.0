@@ -147,20 +147,20 @@ export default function LandingPage() {
       const [jobsRes, candidatesRes, testimonialsRes] = await Promise.all([
         supabase
           .from('vagas')
-          .select('*')
+          .select('id, title, company, location, type, area, status, salary, description, requirements, logo_url, site_url, email, phone, attachment_url, created_at, verified')
           .in('status', ['active', 'approved'])
           .order('created_at', { ascending: false })
           .limit(3),
         supabase
           .from('talentos')
-          .select('*')
+          .select('id, name, email, phone, location, area, status, role, summary, skills, image, cv_url, verified, created_at, expires_at')
           .in('status', ['active', 'approved'])
           .or(publicUnexpiredOrFilter())
           .order('created_at', { ascending: false })
           .limit(3),
         supabase
           .from('testimonials')
-          .select('*')
+          .select('id, name, role, company, content, photo_url, created_at, status')
           .eq('status', 'approved')
           .order('created_at', { ascending: false })
           .limit(2)

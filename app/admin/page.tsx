@@ -745,10 +745,18 @@ export default function Dashboard() {
 
   const sendNotificationEmail = async (toEmail: string, subject: string, htmlContent: string) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        triggerToast('Sessão expirada. Faça login novamente.', 'error');
+        router.push('/admin/login');
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+
       const response = await fetch('/api/send-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           to: toEmail,
@@ -757,6 +765,11 @@ export default function Dashboard() {
         }),
       });
       const data = await response.json();
+      if (response.status === 401) {
+        triggerToast('Sessão expirada. Faça login novamente.', 'error');
+        router.push('/admin/login');
+        throw new Error(data.error || 'Sessão inválida ou expirada. Faça login novamente.');
+      }
       if (!response.ok) {
         throw new Error(data.error || 'Erro ao comunicar com o servidor de e-mails.');
       }
