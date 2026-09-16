@@ -198,7 +198,7 @@ app/api/
 |---|---|
 | Formulários de cadastro (`/vagas/cadastrar`, `/talentos/cadastrar`, etc.) | `/api/send-email` |
 | `app/contato/page.tsx` | `/api/send-email` |
-| `app/admin/page.tsx` (aprovações) | `/api/send-email` |
+| `app/admin/page.tsx` (moderação para publicação) | `/api/send-email` |
 | `app/admin/emails/page.tsx` | `/api/send-campaign` |
 | `app/components/AnalyticsTracker.tsx` | `/api/track-visit` |
 | Links em campanhas de e-mail | `/api/track-click`, `/api/unsubscribe` |
@@ -284,10 +284,11 @@ No formulário de contato, o e-mail do visitante é enviado como **Reply-To** (`
 │                                                              │
 │  Cadastro público ──┐                                        │
 │  Formulário contato ├──→ POST /api/send-email ──→ Resend    │
-│  Admin (aprovação) ─┘         │                              │
+│  Moderação p/ publicação ─┘                                  │
 │                               ▼                              │
 │                    robinho@correntedobembr.com.br            │
-│                    (ou e-mail do usuário, em aprovações)     │
+│                    (ou e-mail do usuário, após publicação    │
+│                     ou não publicação)                       │
 │                                                              │
 │  Contato: Reply-To = e-mail do visitante;                    │
 │  sucesso na UI só se o Resend confirmar o envio;             │

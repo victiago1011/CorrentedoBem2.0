@@ -1194,17 +1194,18 @@ export default function Dashboard() {
         try {
           await sendNotificationEmail(
             email,
-            'Sua vaga foi aprovada na Corrente do Bem! 🎉',
+            'Sua vaga está disponível na Corrente do Bem',
             `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá! Notícia maravilhosa! 🎉</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Temos o prazer de informar que a sua vaga "<strong>${job.title}</strong>" foi <strong>aprovada</strong> pela nossa moderação e já está ativa no portal <strong>Corrente do Bem</strong>!</p>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agora ela poderá ser visualizada por centenas de talentos engajados na nossa rede.</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá.</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">A vaga "<strong>${job.title}</strong>", cadastrada para <strong>${job.company}</strong>, já está disponível para consulta na Corrente do Bem.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">A publicação poderá ser visualizada por pessoas que acessam nossa área de oportunidades.</p>
                 
                 <div style="text-align: center; margin-top: 25px; margin-bottom: 25px;">
-                  <a href="https://correntedobembr.com.br/vagas" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Visualizar Vagas no Portal</a>
+                  <a href="https://correntedobembr.com.br/vagas" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Ver Vagas</a>
                 </div>
 
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Caso seja necessário alterar ou retirar a publicação, utilize nossos canais de contato.</p>
                 <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
                 <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
               </div>
@@ -1254,14 +1255,14 @@ export default function Dashboard() {
             'Atualização sobre sua vaga na Corrente do Bem',
             `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, anunciante!</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agradecemos por enviar a sua vaga "<strong>${job.title}</strong>" na plataforma <strong>Corrente do Bem</strong>.</p>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Após análise de moderação, informamos que a publicação da vaga foi <strong>recusada</strong>.</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá.</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Recebemos a vaga "<strong>${job.title}</strong>", cadastrada para <strong>${job.company}</strong>, na Corrente do Bem.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Após a moderação do conteúdo enviado, no momento não foi possível realizar a publicação na Corrente do Bem.</p>
                 <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 8px;">
-                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo / Justificativa detalhada:</strong>
-                  <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada para correção informada.'}"</p>
+                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo informado:</strong>
+                  <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada informada.'}"</p>
                 </div>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Se desejar, você pode efetuar os ajustes sugeridos e submeter um novo anúncio de vaga.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Você poderá realizar os ajustes indicados e enviar um novo cadastro.</p>
                 <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
                 <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
               </div>
@@ -1342,17 +1343,18 @@ export default function Dashboard() {
         try {
           await sendNotificationEmail(
             email,
-            'Seu perfil de talento foi aprovado na Corrente do Bem! 🎉',
+            'Seu currículo está disponível na Corrente do Bem',
             `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${cand.name}! 🎉</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu currículo para a função de "<strong>${cand.role}</strong>" foi analisado e **aprovado** pelo nosso time de moderação.</p>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu perfil agora está visível e ativo no portal <strong>Corrente do Bem</strong> para que empresas e parceiros com propósito possam encontrar você!</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${cand.name}.</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu perfil e currículo já estão disponíveis para consulta na Corrente do Bem.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">A partir de agora, as informações públicas do seu cadastro poderão ser consultadas por empresas, parceiros e visitantes da plataforma durante o período de publicação.</p>
                 
                 <div style="text-align: center; margin-top: 25px; margin-bottom: 25px;">
-                  <a href="https://correntedobembr.com.br/talentos" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Explorar Talentos</a>
+                  <a href="https://correntedobembr.com.br/talentos" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Ver Talentos</a>
                 </div>
 
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Caso queira solicitar alguma alteração ou retirada do cadastro, entre em contato conosco pelos canais disponíveis no site.</p>
                 <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
                 <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
               </div>
@@ -1409,14 +1411,14 @@ export default function Dashboard() {
             'Atualização sobre seu cadastro na Corrente do Bem',
             `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${cand.name}!</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agradecemos pelo cadastro de seu perfil profissional "<strong>${cand.role}</strong>" na plataforma <strong>Corrente do Bem</strong>.</p>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Após análise do nosso time, informamos que o seu currículo foi <strong>recusado</strong> para publicação pública.</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${cand.name}.</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Recebemos o cadastro do seu currículo na Corrente do Bem.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Após a moderação do conteúdo enviado, no momento não foi possível realizar a publicação na Corrente do Bem.</p>
                 <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 8px;">
-                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Observação da moderação:</strong>
-                  <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada para correção informada.'}"</p>
+                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo informado:</strong>
+                  <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada informada.'}"</p>
                 </div>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Se julgar pertinente, sinta-se à vontade para efetuar as correções indicadas e registrar novamente o seu currículo.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Você poderá realizar os ajustes indicados e enviar um novo cadastro.</p>
                 <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
                 <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
               </div>
@@ -1463,17 +1465,18 @@ export default function Dashboard() {
         try {
           await sendNotificationEmail(
             email,
-            'Seu depoimento foi aprovado na Corrente do Bem! 🎉',
+            'Seu depoimento foi publicado na Corrente do Bem',
             `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${testimonial.name}! 🎉</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu depoimento de inspiração foi **aprovado** para exibição em nosso portal!</p>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agradecemos do fundo do coração por compartilhar sua história de impacto para inspirar milhares de pessoas em nossa rede da <strong>Corrente do Bem</strong>.</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${testimonial.name}.</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Obrigado por compartilhar sua experiência com a Corrente do Bem.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu depoimento já está publicado na plataforma.</p>
                 
                 <div style="text-align: center; margin-top: 25px; margin-bottom: 25px;">
-                  <a href="https://correntedobembr.com.br" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Visitar o Portal</a>
+                  <a href="https://correntedobembr.com.br" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Visitar Corrente do Bem</a>
                 </div>
 
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Caso queira solicitar alguma alteração ou retirada do depoimento, entre em contato conosco.</p>
                 <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
                 <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
               </div>
@@ -1519,14 +1522,14 @@ export default function Dashboard() {
             'Atualização sobre seu depoimento na Corrente do Bem',
             `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${testimonial.name}!</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Agradecemos por compartilhar o seu depoimento na plataforma <strong>Corrente do Bem</strong>.</p>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Durante a moderação de nossos depoimentos de impacto, informamos que o seu depoimento foi <strong>recusado</strong> para publicação.</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${testimonial.name}.</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Recebemos o seu depoimento na Corrente do Bem.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Após a moderação do conteúdo enviado, no momento não foi possível realizar a publicação na Corrente do Bem.</p>
                 <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 8px;">
-                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo indicado:</strong>
+                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo informado:</strong>
                   <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada informada.'}"</p>
                 </div>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Valorizamos de coração sua participação na rede e desejamos as melhores realizações em sua caminhada!</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Caso queira, você poderá realizar os ajustes indicados e enviar um novo depoimento.</p>
                 <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
                 <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
               </div>
@@ -2019,17 +2022,18 @@ export default function Dashboard() {
         try {
           await sendNotificationEmail(
             email,
-            'Seu anúncio de negócio foi aprovado na Corrente do Bem! 🎉',
+            'Seu negócio está disponível na Corrente do Bem',
             `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${negocio.owner_name}! 🎉</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Boa notícia! Sua proposta de negócio "<strong>${negocio.title}</strong>" foi revisada e **aprovada** pela nossa equipe.</p>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Seu anúncio ou oportunidade comercial já está ativa no diretório oficial da <strong>Corrente do Bem</strong>!</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${negocio.owner_name}.</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">O cadastro "<strong>${negocio.title}</strong>" já está disponível para consulta na área de Negócios da Corrente do Bem.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">As informações destinadas à divulgação poderão ser visualizadas pelos visitantes da plataforma durante o período de publicação.</p>
                 
                 <div style="text-align: center; margin-top: 25px; margin-bottom: 25px;">
-                  <a href="https://correntedobembr.com.br/negocios" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Acessar Negócios do Portal</a>
+                  <a href="https://correntedobembr.com.br/negocios" style="background-color: #bff444; color: #141f00; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(191,244,68,0.3);">Ver Negócios</a>
                 </div>
 
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Caso queira solicitar alguma alteração ou retirada, entre em contato conosco.</p>
                 <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
                 <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
               </div>
@@ -2067,17 +2071,17 @@ export default function Dashboard() {
         try {
           await sendNotificationEmail(
             email,
-            'Atualização sobre seu anúncio de negócio na Corrente do Bem',
+            'Atualização sobre seu negócio na Corrente do Bem',
             `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${negocio.owner_name}!</h2>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Analisamos a proposta de negócio "<strong>${negocio.title}</strong>" que você publicou na plataforma <strong>Corrente do Bem</strong>.</p>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Lamentamos informar que a publicação do seu negócio foi <strong>recusada</strong> pela nossa moderação.</p>
+                <h2 style="color: #00628c; margin-top: 0; font-size: 20px; font-weight: 800; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Olá, ${negocio.owner_name}.</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Recebemos o cadastro "<strong>${negocio.title}</strong>" na área de Negócios da Corrente do Bem.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Após a moderação do conteúdo enviado, no momento não foi possível realizar a publicação na Corrente do Bem.</p>
                 <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0; border-radius: 8px;">
-                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo indicado:</strong>
+                  <strong style="color: #991b1b; font-size: 13px; text-transform: uppercase; tracking-wider">Motivo informado:</strong>
                   <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic; font-size: 14px;">"${rejectionJustification || 'Sem justificativa detalhada informada.'}"</p>
                 </div>
-                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Se desejar, você pode efetuar os ajustes sugeridos e submeter uma nova oportunidade de negócio.</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #334155;">Você poderá realizar os ajustes indicados e enviar um novo cadastro.</p>
                 <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;" />
                 <p style="font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; margin: 0;">Atenciosamente,<br/><strong style="color: #0b1f33;">Equipe Corrente do Bem</strong></p>
               </div>

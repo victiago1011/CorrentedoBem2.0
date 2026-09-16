@@ -291,9 +291,9 @@ export default function CadastrarTalentoPage() {
           <div className="w-20 h-20 bg-[#bff444] rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-[#bff444]/20">
             <CheckCircle2 className="w-10 h-10 text-[#141f00]" />
           </div>
-          <h2 className="text-3xl font-extrabold text-[#00628c] mb-4 font-headline">Perfil Enviado!</h2>
+          <h2 className="text-3xl font-extrabold text-[#00628c] mb-4 font-headline">Currículo enviado com sucesso</h2>
           <p className="text-[#3e4850] mb-10 leading-relaxed">
-            Seu currículo foi enviado e está aguardando aprovação. Em breve seu talento estará visível para empresas com propósito.
+            Recebemos seu currículo. Ele passará por uma moderação para publicação e, quando estiver disponível no site, você receberá uma notificação por e-mail.
           </p>
           <Link 
             href="/" 

@@ -289,9 +289,9 @@ export default function CadastrarNegocioPage() {
           <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-orange-100/20">
             <CheckCircle2 className="w-10 h-10 text-orange-600" />
           </div>
-          <h2 className="text-3xl font-extrabold text-[#00628c] mb-4 font-headline">Oportunidade Enviada!</h2>
+          <h2 className="text-3xl font-extrabold text-[#00628c] mb-4 font-headline">Negócio enviado com sucesso</h2>
           <p className="text-[#3e4850] mb-10 leading-relaxed">
-            Sua oportunidade de negócio foi enviada e está aguardando aprovação. Em breve ela estará disponível na galeria de negócios.
+            Recebemos o cadastro do seu negócio. Ele passará por uma moderação para publicação e, quando estiver disponível no site, você receberá uma notificação por e-mail.
           </p>
           <Link 
             href="/" 

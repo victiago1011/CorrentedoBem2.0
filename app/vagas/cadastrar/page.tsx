@@ -125,10 +125,9 @@ export default function CadastrarVagaPage() {
           <div className="w-20 h-20 bg-[#bff444] rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-[#bff444]/20">
             <CheckCircle2 className="w-10 h-10 text-[#141f00]" />
           </div>
-          <h2 className="text-3xl font-extrabold text-[#00628c] mb-4 font-headline">Vaga Enviada!</h2>
+          <h2 className="text-3xl font-extrabold text-[#00628c] mb-4 font-headline">Vaga enviada com sucesso</h2>
           <p className="text-[#3e4850] mb-10 leading-relaxed">
-            Sua vaga foi enviada e está aguardando aprovação dos nossos administradores. Em breve ela
-            estará disponível no portal.
+            Recebemos sua vaga. Ela passará por uma moderação para publicação e, quando estiver disponível no site, você receberá uma notificação por e-mail.
           </p>
           <Link
             href="/"

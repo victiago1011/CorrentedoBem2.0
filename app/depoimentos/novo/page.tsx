@@ -228,9 +228,9 @@ export default function NewTestimonial() {
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600">
             <CheckCircle2 className="w-12 h-12" />
           </div>
-          <h1 className="text-3xl font-extrabold text-[#1b1c1c] mb-4 font-headline">Depoimento Enviado!</h1>
+          <h1 className="text-3xl font-extrabold text-[#1b1c1c] mb-4 font-headline">Depoimento enviado com sucesso</h1>
           <p className="text-[#3e4850] mb-8 leading-relaxed">
-            Obrigado por compartilhar sua história! Seu depoimento foi enviado para aprovação e em breve aparecerá em nossa comunidade.
+            Recebemos seu depoimento. Ele passará por uma moderação para publicação e, quando estiver disponível no site, você receberá uma notificação por e-mail.
           </p>
           <Link href="/" className="inline-block bg-[#00628c] text-white px-8 py-3 rounded-2xl font-bold hover:scale-105 transition-transform">
             Voltar para o Início
