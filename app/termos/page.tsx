@@ -56,20 +56,40 @@ export default function TermosPage() {
                   Quem cadastra currículo declara ser o titular dos dados (ou ter autorização), que as informações são verdadeiras e que assume responsabilidade pelo conteúdo enviado, inclusive anexos.
                 </p>
                 <p>
-                  O cadastro de Talento passa por análise. Se aprovado, o perfil fica público, incluindo contato e currículo para visualização e download, conforme a Política de Privacidade.
+                  O cadastro de Talento passa por análise. Se aprovado, o perfil fica público, incluindo contato e currículo para visualização e download, por até 6 meses após a aprovação, conforme a Política de Privacidade. A publicação pode cessar antes desse prazo por moderação, solicitação do titular ou outros motivos previstos nestes Termos.
                 </p>
               </section>
 
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c]">4. Cadastro de vagas</h2>
                 <p>
-                  Quem cadastra vaga declara ter autorização para divulgar a oportunidade e os dados da empresa, e que a vaga é lícita e verdadeira.
+                  Quem cadastra vaga declara ter autorização para divulgar a oportunidade e os dados da empresa, e que a vaga é lícita e verdadeira. As vagas seguem a própria validade e o período de publicação da plataforma.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">5. Cadastro de negócios</h2>
+                <p>
+                  Quem cadastra um negócio declara que as informações são verdadeiras, que possui autorização e legitimidade para divulgar o negócio, a oportunidade e os materiais enviados, e que possui direito de disponibilizar logo, imagens e anexos, sem infringir direitos de terceiros.
+                </p>
+                <p>
+                  O cadastro passa por análise. Se aprovado, as informações destinadas à divulgação podem ficar públicas por até 6 meses após a aprovação, conforme a Política de Privacidade. A Corrente do Bem poderá solicitar ajustes, recusar, despublicar ou excluir conteúdo que viole estes Termos, a Política de Privacidade ou a legislação aplicável. A publicação pode cessar antes do prazo por esses motivos. A plataforma não se reserva o direito de alterar livremente o conteúdo enviado pelo usuário.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">6. Depoimentos</h2>
+                <p>
+                  Quem envia depoimento declara que o relato representa sua experiência ou opinião, que possui direito sobre a foto enviada, quando houver, e que autoriza a publicação após aprovação. O conteúdo poderá ser exibido publicamente enquanto estiver ativo na plataforma, sem prazo automático de expiração, podendo ser retirado pela equipe ou mediante solicitação do titular quando aplicável.
+                </p>
+                <p>
+                  Este envio não implica cessão irrestrita de direitos autorais. A Corrente do Bem utiliza o depoimento para divulgação institucional da iniciativa, nos limites desta autorização.
                 </p>
               </section>
 
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c] flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-[#00628c]" /> 5. Conduta
+                  <AlertCircle className="w-5 h-5 text-[#00628c]" /> 7. Conduta
                 </h2>
                 <p>É proibido:</p>
                 <ul className="list-disc pl-6 space-y-2">
@@ -82,21 +102,21 @@ export default function TermosPage() {
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">6. Moderação</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">8. Moderação</h2>
                 <p>
                   A equipe poderá solicitar ajustes, recusar, despublicar ou excluir conteúdos que violem estes Termos, a Política de Privacidade ou a legislação aplicável.
                 </p>
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">7. Responsabilidade das partes</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">9. Responsabilidade das partes</h2>
                 <p>
                   Candidatos e empresas negociam entre si. A Corrente do Bem não responde por acordos, pagamentos, condutas de terceiros ou cópias de dados feitas por visitantes após a publicação.
                 </p>
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">8. Contato</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">10. Contato</h2>
                 <p>
                   Pedidos relacionados a estes Termos: <Link href="/contato" className="font-bold text-[#00628c] underline underline-offset-2">/contato</Link> ou robinho@correntedobembr.com.br.
                 </p>

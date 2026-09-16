@@ -40,6 +40,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
+import { publicUnexpiredOrFilter, isWithinPublicWindow } from '@/lib/legal';
 
 // Helper component for candidate images with error fallback
 const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: string; name: string; className?: string }) => {
@@ -106,6 +107,7 @@ interface Candidate {
   cv_url?: string;
   verified?: boolean;
   created_at?: string;
+  expires_at?: string | null;
 }
 
 function TalentosContent() {
@@ -142,6 +144,7 @@ function TalentosContent() {
         .from('talentos')
         .select('*')
         .eq('status', 'active')
+        .or(publicUnexpiredOrFilter())
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -151,7 +154,7 @@ function TalentosContent() {
           details: error.details
         });
       }
-      if (data) setCandidates(data);
+      if (data) setCandidates(data.filter((item) => isWithinPublicWindow(item.expires_at)));
       setIsLoading(false);
     }
     fetchCandidates();

@@ -35,6 +35,7 @@ import { supabase } from '@/lib/supabase';
 import { cn, ensureExternalLink, stripHtml } from '@/lib/utils';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
+import { publicUnexpiredOrFilter, isWithinPublicWindow } from '@/lib/legal';
 
 // Helper component for candidate images with error fallback
 const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: string; name: string; className?: string }) => {
@@ -97,6 +98,7 @@ interface Candidate {
   cv_url?: string;
   verified?: boolean;
   created_at?: string;
+  expires_at?: string | null;
 }
 
 interface Attachment {
@@ -153,6 +155,7 @@ export default function LandingPage() {
           .from('talentos')
           .select('*')
           .in('status', ['active', 'approved'])
+          .or(publicUnexpiredOrFilter())
           .order('created_at', { ascending: false })
           .limit(3),
         supabase
@@ -172,7 +175,7 @@ export default function LandingPage() {
       if (candidatesRes.error) {
         console.error('Erro ao buscar destaques de talentos:', candidatesRes.error);
       } else if (candidatesRes.data) {
-        setFeaturedCandidates(candidatesRes.data);
+        setFeaturedCandidates(candidatesRes.data.filter((item) => isWithinPublicWindow(item.expires_at)));
       }
 
       if (testimonialsRes.error) {

@@ -54,9 +54,9 @@ export default function PrivacidadePage() {
                   <li>dados profissionais (área, cargo, resumo, habilidades, currículo);</li>
                   <li>localização informada;</li>
                   <li>dados de vagas e negócios (empresa, descrição, anexos, logo);</li>
-                  <li>depoimentos;</li>
-                  <li>e-mails de newsletter, quando houver inscrição;</li>
-                  <li>mensagens enviadas pelo formulário de contato (encaminhadas por e-mail, sem gravação no banco pela aplicação);</li>
+                  <li>depoimentos (nome, foto, cargo, empresa e texto; e-mail, quando informado, para uso interno);</li>
+                  <li>e-mails de comunicações/newsletter, quando a pessoa é inscrita pela operação da equipe;</li>
+                  <li>mensagens enviadas pelo formulário de contato, processadas para atendimento;</li>
                   <li>dados técnicos básicos de visita (analytics de páginas), quando aplicável.</li>
                 </ul>
               </section>
@@ -66,38 +66,63 @@ export default function PrivacidadePage() {
                 <p>
                   O cadastro é voluntário. Após análise da equipe, o perfil pode ser publicado na Galeria. Ficam públicos, se aprovados: nome; foto (se enviada); cidade/localização; área; cargo/função; resumo; habilidades; e-mail; telefone; currículo/PDF completo para visualização e download.
                 </p>
+                <p>
+                  Perfis aprovados podem permanecer publicados por até 6 meses após a aprovação. A Corrente do Bem pode despublicar antes desse prazo por moderação, por solicitação do titular ou por outros motivos previstos nos Termos de Uso. Não há garantia de que o perfil permanecerá visível durante todo o período.
+                </p>
               </section>
 
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c]">4. Vagas</h2>
                 <p>
-                  Empresas e pessoas autorizadas podem cadastrar oportunidades. Após aprovação, a vaga e os contatos informados podem ficar públicos.
+                  Empresas e pessoas autorizadas podem cadastrar oportunidades. Após aprovação, a vaga e os contatos informados podem ficar públicos. As vagas seguem a própria validade e o período de publicação da plataforma, e não se aplica a elas o prazo de 6 meses previsto para Talentos e Negócios.
                 </p>
               </section>
 
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c]">5. Negócios</h2>
                 <p>
-                  Oportunidades cadastradas passam por moderação e, se aprovadas, podem ser exibidas publicamente com os dados de contato fornecidos.
+                  O cadastro é voluntário e passa por moderação humana. Não há publicação automática. Quem cadastra declara que as informações são verdadeiras e que possui legitimidade e autorização para divulgar o negócio, a oportunidade e os materiais enviados.
                 </p>
-              </section>
-
-              <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">6. Newsletter</h2>
                 <p>
-                  Quando alguém é inscrito para comunicações, o e-mail é usado para envio de campanhas, com possibilidade de descadastro pelos meios disponíveis na mensagem ou no site.
+                  Se aprovado, o negócio pode ser exibido publicamente por até 6 meses após a aprovação. Podem ficar públicos, quando informados: título da oportunidade; nome do negócio/empresa; localização; tipo; área; descrição; site/redes; logo; e-mail; telefone/WhatsApp; e arquivos enviados para divulgação. O nome do responsável é tratado internamente pela equipe e não é exibido na página pública.
                 </p>
-              </section>
-
-              <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">7. Formulário de contato</h2>
                 <p>
-                  A mensagem é enviada à equipe no e-mail robinho@correntedobembr.com.br, usando o e-mail do remetente como resposta. Não salvamos essa mensagem no banco de dados da aplicação.
+                  A Corrente do Bem pode despublicar antes desse prazo por moderação, por solicitação do titular ou por outros motivos previstos nos Termos de Uso. Não há garantia de que o conteúdo permanecerá visível durante todo o período.
                 </p>
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">8. Finalidades</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">6. Depoimentos</h2>
+                <p>
+                  O envio de depoimento é voluntário e passa por moderação. Se aprovado, podem ficar públicos: nome, foto (quando enviada), cargo, empresa e o texto do depoimento. O e-mail, quando coletado, é utilizado internamente para contato e notificações e não é publicado.
+                </p>
+                <p>
+                  Depoimentos não possuem prazo automático de expiração e podem permanecer publicados enquanto estiverem ativos na plataforma, sem prejuízo da possibilidade de retirada pela equipe ou mediante solicitação do titular, pelos canais indicados nesta Política.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">7. Newsletter</h2>
+                <p>
+                  A lista de comunicações é operada pela equipe da Corrente do Bem. Quando alguém é inscrito, o e-mail e, se informado, o nome são usados para envio de campanhas e novidades. Campanhas podem registrar métricas de clique quando o link da mensagem utiliza rastreamento. O descadastro pode ser feito pelo link disponível na própria mensagem.
+                </p>
+                <p>
+                  Hoje não há formulário público de inscrição no site. A inscrição ocorre pelos fluxos operacionais da equipe.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">8. Formulário de contato</h2>
+                <p>
+                  As informações enviadas pelo formulário de contato (nome, e-mail, assunto e mensagem) são utilizadas para receber, analisar e responder à solicitação. No fluxo atual do site, a mensagem é encaminhada por e-mail à equipe, usando o endereço informado para resposta.
+                </p>
+                <p>
+                  Dependendo do fluxo operacional utilizado ao longo do tempo, essas informações podem ser processadas pelos serviços de e-mail e/ou mantidas nos sistemas da Corrente do Bem pelo período necessário ao atendimento. Há registros históricos de contatos em sistemas internos; o formulário público vigente não alimenta uma caixa de entrada de mensagens no painel administrativo.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">9. Finalidades</h2>
                 <p>Utilizamos os dados para:</p>
                 <ul className="list-disc pl-6 space-y-2">
                   <li>viabilizar a conexão entre talentos, empresas e a comunidade;</li>
@@ -110,7 +135,7 @@ export default function PrivacidadePage() {
 
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c] flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-[#00628c]" /> 9. Publicação pública dos Talentos
+                  <FileText className="w-5 h-5 text-[#00628c]" /> 10. Publicação pública dos Talentos
                 </h2>
                 <p>
                   Ao autorizar no cadastro de Talento, a pessoa concorda que, após aprovação, nome, foto, localização, e-mail, telefone, informações profissionais e o currículo completo ficam acessíveis na internet. Terceiros podem visualizar, baixar, armazenar, compartilhar e manter cópias. A Corrente do Bem pode remover as informações dos seus próprios sistemas quando cabível, mas não consegue garantir a exclusão de cópias feitas por terceiros nem de conteúdos já indexados ou em cache fora do seu controle.
@@ -118,35 +143,38 @@ export default function PrivacidadePage() {
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">10. Moderação</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">11. Moderação</h2>
                 <p>
                   Cadastros entram como pendentes e só são publicados após análise. A equipe poderá recusar, despublicar ou excluir conteúdos que violem os Termos, esta Política ou a legislação aplicável.
                 </p>
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">11. Permanência da publicação</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">12. Permanência da publicação</h2>
                 <p>
-                  O perfil aprovado permanece público enquanto estiver ativo na plataforma. Hoje a retirada ocorre por pedido do titular, pelos canais abaixo, ou por decisão de moderação. Se no futuro for adotado um prazo máximo de publicação, esta Política será atualizada antes ou no momento em que essa prática passar a valer.
+                  Talentos e Negócios aprovados podem permanecer públicos por até 6 meses após a aprovação, podendo ser despublicados antes por moderação, solicitação do titular ou outros motivos previstos nos Termos. Vagas seguem a própria validade da plataforma. Depoimentos aprovados podem permanecer publicados enquanto estiverem ativos, sem prazo automático de expiração, também sujeitos a retirada pela equipe ou mediante solicitação do titular quando aplicável.
+                </p>
+                <p>
+                  Pedidos de retirada são feitos pelos canais abaixo. A remoção nos sistemas da Corrente do Bem não garante a exclusão de cópias já obtidas por terceiros nem de conteúdos indexados ou em cache fora do seu controle.
                 </p>
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">12. Direitos do titular</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">13. Direitos do titular</h2>
                 <p>
                   O titular pode solicitar confirmação de tratamento, correção, atualização, despublicação ou exclusão, e revogar o consentimento para tratamentos futuros baseados nesse fundamento, na medida aplicável.
                 </p>
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">13. Correção, exclusão e revogação</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">14. Correção, exclusão e revogação</h2>
                 <p>
                   Pedidos: formulário em <Link href="/contato" className="font-bold text-[#00628c] underline underline-offset-2">/contato</Link> ou e-mail robinho@correntedobembr.com.br, identificando-se e descrevendo o pedido. A revogação não apaga cópias já obtidas por terceiros enquanto o conteúdo esteve público.
                 </p>
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">14. Prestadores tecnológicos</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">15. Prestadores tecnológicos</h2>
                 <p>
                   Hospedagem e banco (Supabase/PostgreSQL); hospedagem do site (Vercel); e-mails (Resend); DNS (Cloudflare), conforme a operação atual.
                 </p>
@@ -154,7 +182,7 @@ export default function PrivacidadePage() {
 
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c] flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-[#00628c]" /> 15. Segurança
+                  <Shield className="w-5 h-5 text-[#00628c]" /> 16. Segurança
                 </h2>
                 <p>
                   Adotamos medidas compatíveis com o porte da iniciativa (acesso administrativo autenticado, HTTPS, moderação). Nenhum sistema é isento de risco.
@@ -162,7 +190,7 @@ export default function PrivacidadePage() {
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c]">16. Atualizações</h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">17. Atualizações</h2>
                 <p>
                   Esta Política pode ser alterada. A versão vigente será a publicada nesta página, com a data de atualização.
                 </p>

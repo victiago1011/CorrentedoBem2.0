@@ -60,6 +60,8 @@ CorrentedoBem/
 ├── hooks/                  # Hooks React reutilizáveis
 ├── docs/                   # Documentação do projeto
 ├── SUPABASE_SETUP.md       # Script SQL das tabelas principais
+├── SUPABASE_LGPD_CONSENT.sql # Consentimento Fase 1 (talentos/vagas)
+├── SUPABASE_LGPD_CONSENT_FASE2.sql # Consentimento Fase 2 + prazo de 6 meses
 ├── SUPABASE_NEWSLETTER.sql # Script SQL da tabela de newsletter
 ├── SUPABASE_ANALYTICS.sql  # Script SQL da tabela de analytics
 ├── next.config.ts          # Configuração do Next.js
@@ -75,6 +77,7 @@ Contém **tudo** que o Next.js serve: páginas públicas, painel admin, rotas de
 
 | Arquivo | Responsabilidade |
 |---|---|
+| `legal.ts` | Versão jurídica, janela de publicação (6 meses) e filtro público de expiração |
 | `supabase.ts` | Instancia e exporta o único cliente Supabase |
 | `utils.ts` | Funções utilitárias: `cn`, `maskPhone`, `maskCurrency`, `ensureExternalLink`, `stripHtml` |
 

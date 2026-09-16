@@ -57,7 +57,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn, maskCurrency, maskPhone, ensureExternalLink, stripHtml } from '@/lib/utils';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
-import { getTalentPublicationWindow } from '@/lib/legal';
+import { getTalentPublicationWindow, getPublicationWindow } from '@/lib/legal';
 import { useRouter } from 'next/navigation';
 
 import Link from 'next/link';
@@ -231,6 +231,9 @@ interface Negocio {
   logo_url?: string;
   created_at?: string;
   verified?: boolean;
+  privacy_consent?: boolean | null;
+  published_at?: string | null;
+  expires_at?: string | null;
 }
 
 interface HistoryItem {
@@ -1840,6 +1843,7 @@ export default function Dashboard() {
       }
     }
 
+    const publication = getPublicationWindow();
     const negoData = {
       title: formData.get('title') as string,
       owner_name: formData.get('owner_name') as string,
@@ -1853,7 +1857,9 @@ export default function Dashboard() {
       description: negDescription || null,
       attachment_url: negAttachments.length > 0 ? JSON.stringify(negAttachments) : null,
       logo_url: negLogoUrl || null,
-      status: 'active'
+      status: 'active',
+      published_at: publication.published_at,
+      expires_at: publication.expires_at,
     };
 
     const { data, error } = await supabase
@@ -1993,9 +1999,19 @@ export default function Dashboard() {
   const approveNegocio = React.useCallback(async (id: string | number) => {
     const negocio = negocios.find(n => String(n.id) === String(id));
     if (!negocio) return;
-    const { data, error } = await supabase.from('negocios').update({ status: 'active' }).eq('id', id).select();
+    const updatePayload: {
+      status: string;
+      published_at?: string;
+      expires_at?: string;
+    } = {
+      status: 'active',
+    };
+    if (!negocio.published_at) {
+      Object.assign(updatePayload, getPublicationWindow());
+    }
+    const { data, error } = await supabase.from('negocios').update(updatePayload).eq('id', id).select();
     if (!error && data && data.length > 0) {
-      setNegocios(prev => prev.map(n => String(n.id) === String(id) ? { ...n, status: 'active' } : n));
+      setNegocios(prev => prev.map(n => String(n.id) === String(id) ? { ...n, ...data[0], status: 'active' } : n));
       triggerToast('Negócio aprovado!');
 
       const email = negocio.contact_email;
@@ -4328,6 +4344,16 @@ export default function Dashboard() {
                     <div>
                       <h3 className="text-xl lg:text-2xl font-extrabold text-on-surface leading-tight font-headline">{selectedNegocio.title}</h3>
                       <p className="text-orange-600 font-bold text-xs lg:text-sm">{selectedNegocio.owner_name}</p>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                        {selectedNegocio.privacy_consent === true
+                          ? 'Consentimento registrado'
+                          : 'Consentimento não registrado'}
+                      </p>
+                      {selectedNegocio.expires_at && new Date(selectedNegocio.expires_at) <= new Date() && (
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-red-600">
+                          Publicação expirada
+                        </p>
+                      )}
                       <div className="flex gap-3 mt-3">
                         <Share2 className="w-4 h-4 text-orange-600 cursor-pointer hover:scale-110 transition-transform" />
                         <Zap className="w-4 h-4 text-orange-600 cursor-pointer hover:scale-110 transition-transform" />

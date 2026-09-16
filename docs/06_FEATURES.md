@@ -69,11 +69,19 @@ O visitante pode:
 
 O cadastro público em `/talentos/cadastrar` exige duas confirmações desmarcadas por padrão: aceite dos Termos de Uso e autorização expressa de publicação pública. O aceite é gravado com data e versão. Não há backfill de consentimento em registros antigos.
 
+Perfis aprovados podem permanecer públicos por até 6 meses após a aprovação. A listagem pública oculta registros com `expires_at` no passado, sem apagar o cadastro. Registros antigos sem janela (`expires_at` NULL) continuam visíveis.
+
 ---
 
 ## Negócios
 
 Área destinada à divulgação de negócios e oportunidades.
+
+O cadastro público em `/negocios/cadastrar` exige duas confirmações desmarcadas: aceite dos Termos (com declaração de legitimidade) e autorização de publicação após aprovação. O aceite é gravado com data e versão. Cadastros Admin não recebem consentimento artificial.
+
+Após aprovação, podem ficar públicos: título, nome do negócio, localização, tipo, área, descrição, link, logo, e-mail, telefone e anexos. O nome do responsável permanece interno.
+
+Negócios aprovados podem permanecer públicos por até 6 meses após a aprovação. Pendentes não consomem esse prazo. A listagem pública oculta expirados sem exclusão física.
 
 ---
 
@@ -89,19 +97,15 @@ Cada notícia possui sua própria página.
 
 Exibe relatos publicados pela administração.
 
+O envio público em `/depoimentos/novo` exige uma confirmação desmarcada (Termos, Política e autorização de publicação). Nome, foto, cargo, empresa e texto podem ficar públicos após aprovação. O e-mail é interno e não é exibido. Não há prazo automático de expiração.
+
 ---
 
 ## Newsletter
 
-Permite cadastrar e-mails para receber novidades.
+A lista é gerida no painel administrativo (`/admin/emails`). Não há inscrição pública no site. Campanhas usam Resend; cliques do botão principal podem ser rastreados; o descadastro ocorre pelo link da mensagem (`/api/unsubscribe`).
 
-Integração:
-
-Resend
-
-Banco:
-
-newsletter_subscribers
+Banco: `newsletter_subscribers`.
 
 ---
 
@@ -119,7 +123,9 @@ Fluxo atual:
 6. O formulário só exibe sucesso se o Resend confirmar o envio.
 7. Em caso de falha, o visitante recebe uma mensagem amigável e pode tentar novamente.
 
-A mensagem **não** é salva no banco de dados.
+A mensagem é enviada pelo Resend e **não** alimenta o painel administrativo. A tabela `contatos` é legada e pode conter registros históricos; o formulário vigente não faz INSERT nela.
+
+O formulário inclui aviso com link para a Política de Privacidade, sem checkbox obrigatória.
 
 O formulário inclui o assunto “Solicitar alteração ou exclusão de currículo ou vaga”. Esse é o canal inicial para pedidos de correção, despublicação ou exclusão. O e-mail real de atendimento é `robinho@correntedobembr.com.br`.
 
@@ -157,7 +163,7 @@ Permite:
 - editar
 - excluir
 
-Na aprovação, o painel registra `published_at` e `expires_at` quando ainda não existirem. O detalhe mostra se o consentimento foi registrado.
+Na aprovação, o painel registra `published_at` e `expires_at` (6 meses de calendário) quando ainda não existirem. O detalhe mostra se o consentimento foi registrado. A galeria pública oculta expirados; o Admin continua exibindo o registro.
 
 ---
 
@@ -169,6 +175,8 @@ Permite:
 - rejeitar
 - editar
 - excluir
+
+Na aprovação ou no cadastro direto publicado, o painel registra `published_at` e `expires_at` (6 meses) quando a janela ainda não existir. O detalhe mostra se o consentimento foi registrado e, se aplicável, se a publicação expirou. Cadastros Admin não preenchem aceite.
 
 ---
 

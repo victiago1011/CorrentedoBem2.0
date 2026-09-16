@@ -106,7 +106,7 @@ sem planejamento.
 
 Toda alteração estrutural deve ser documentada.
 
-Consentimento de Talentos e Vagas: campos nullable, sem backfill. Versão legal em `lib/legal.ts`. Não coletar IP ou fingerprint para o aceite.
+Consentimento de Talentos, Vagas, Negócios e Depoimentos: campos nullable, sem backfill de aceite. Versão legal em `lib/legal.ts`. Prazo de publicação de Talentos e Negócios: até 6 meses após aprovação; listagem pública oculta expirados sem cron e sem exclusão. Depoimentos não expiram automaticamente. Não coletar IP ou fingerprint para o aceite.
 
 
 ---

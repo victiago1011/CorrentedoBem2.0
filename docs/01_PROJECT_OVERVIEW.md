@@ -222,7 +222,7 @@ Remetente configurado: `Corrente do Bem <contato@send.correntedobembr.com.br>`
 ### O que já funciona
 
 - Site público completo com todas as páginas listadas
-- Cadastros públicos com notificação por e-mail
+- Cadastros públicos de Talentos, Vagas, Negócios e Depoimentos com consentimento (versão jurídica `2026-09-16`)
 - Painel admin com moderação de todos os tipos de conteúdo
 - Newsletter com envio de campanhas e rastreamento de cliques
 - Analytics básico de visitas diárias

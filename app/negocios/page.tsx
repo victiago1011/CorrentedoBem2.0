@@ -32,6 +32,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
+import { publicUnexpiredOrFilter, isWithinPublicWindow } from '@/lib/legal';
 
 interface Attachment {
   name: string;
@@ -72,6 +73,7 @@ interface Negocio {
   attachment_url?: string;
   status: 'pending' | 'active' | 'rejected' | 'closed';
   created_at?: string;
+  expires_at?: string | null;
 }
 
 function NegociosContent() {
@@ -111,12 +113,13 @@ function NegociosContent() {
         .from('negocios')
         .select('*')
         .eq('status', 'active')
+        .or(publicUnexpiredOrFilter())
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Erro ao buscar negócios:', error);
       }
-      if (data) setNegocios(data);
+      if (data) setNegocios(data.filter((item) => isWithinPublicWindow(item.expires_at)));
       setIsLoading(false);
     }
     fetchNegocios();

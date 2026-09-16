@@ -18,6 +18,7 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
+import { LEGAL_VERSION } from '@/lib/legal';
 import { useRouter } from 'next/navigation';
 import Cropper from 'react-easy-crop';
 
@@ -26,6 +27,8 @@ export default function NewTestimonial() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string>('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [consentError, setConsentError] = useState('');
   
   // Cropper states
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -100,9 +103,17 @@ export default function NewTestimonial() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!termsAccepted) {
+      setConsentError('Para enviar, é necessário marcar a confirmação abaixo.');
+      return;
+    }
+
+    setConsentError('');
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
+    const acceptedAt = new Date().toISOString();
     const testimonialData = {
       name: formData.get('name') as string,
       role: formData.get('role') as string,
@@ -110,7 +121,13 @@ export default function NewTestimonial() {
       email: formData.get('email') as string || null,
       content: formData.get('content') as string,
       photo_url: photoUrl,
-      status: 'pending'
+      status: 'pending',
+      terms_accepted: true,
+      terms_accepted_at: acceptedAt,
+      terms_version: LEGAL_VERSION,
+      privacy_consent: true,
+      privacy_consent_at: acceptedAt,
+      privacy_policy_version: LEGAL_VERSION,
     };
 
     try {
@@ -335,6 +352,40 @@ export default function NewTestimonial() {
             />
           </div>
 
+          <div className="rounded-2xl border border-[#00628c]/15 bg-[#00628c]/5 p-5 space-y-2">
+            <h2 className="text-sm font-black uppercase tracking-widest text-[#00628c]">Seu depoimento poderá aparecer publicamente</h2>
+            <p className="text-sm text-[#3e4850] leading-relaxed">
+              Após aprovação, seu nome, foto (se enviada), cargo, empresa e o texto do depoimento poderão ser publicados na Corrente do Bem. O e-mail, se informado, é usado internamente para contato e não é exibido na página pública.
+            </p>
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/40"
+              checked={termsAccepted}
+              onChange={(e) => {
+                setTermsAccepted(e.target.checked);
+                setConsentError('');
+              }}
+            />
+            <span className="text-sm text-[#3e4850] leading-relaxed">
+              Li e concordo com os{' '}
+              <Link href="/termos" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00628c] underline underline-offset-2">
+                Termos de Uso
+              </Link>{' '}
+              e com a{' '}
+              <Link href="/privacidade" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00628c] underline underline-offset-2">
+                Política de Privacidade
+              </Link>{' '}
+              e autorizo a publicação do meu nome, foto, informações profissionais e depoimento na Corrente do Bem.
+            </span>
+          </label>
+
+          {consentError && (
+            <p className="text-sm font-bold text-red-600">{consentError}</p>
+          )}
+
           <div className="pt-4">
             <button 
               type="submit" 
@@ -348,9 +399,6 @@ export default function NewTestimonial() {
                 </>
               )}
             </button>
-            <p className="text-center text-[#3e4850] text-sm mt-4">
-              Ao enviar, você autoriza o uso do seu depoimento em nosso site.
-            </p>
           </div>
         </form>
       </main>

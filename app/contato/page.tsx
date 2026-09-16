@@ -282,7 +282,10 @@ export default function ContatoPage() {
                     </button>
                     
                     <p className="text-center text-[#6f7881] text-xs px-8">
-                      Ao enviar, você concorda com nossa Política de Privacidade. Prometemos não fazer spam.
+                      Usaremos seus dados apenas para receber e responder sua mensagem, pelos canais operacionais da Corrente do Bem. Saiba mais na{' '}
+                      <Link href="/privacidade" className="font-bold text-[#00628c] underline underline-offset-2">
+                        Política de Privacidade
+                      </Link>.
                     </p>
                   </motion.form>
                 )}

@@ -22,28 +22,68 @@ A tabela `contatos` permanece no banco por compatibilidade e preservação dos r
 
 ---
 
-## Consentimento e publicação (Talentos e Vagas)
+## Consentimento e publicação
 
-Script: `SUPABASE_LGPD_CONSENT.sql` (executar no SQL Editor do Supabase).
+Versão jurídica: `2026-09-16` (`LEGAL_VERSION` em `lib/legal.ts`).
 
-Colunas adicionadas em `talentos` (nullable, sem backfill):
+Módulos com consentimento registrado no cadastro público:
+
+- Talentos
+- Vagas (somente Termos)
+- Negócios
+- Depoimentos
+
+Cadastros públicos novos gravam o aceite. Cadastros anteriores e cadastros feitos pelo Admin permanecem com os campos de consentimento `NULL` (**Consentimento não registrado**). Não há backfill de consentimento.
+
+### Fase 1 — Talentos e Vagas
+
+Script: `SUPABASE_LGPD_CONSENT.sql`.
+
+Colunas em `talentos` (nullable, sem backfill de consentimento):
 
 - `terms_accepted`
 - `terms_accepted_at`
-- `terms_version` — versão dos Termos aceita pelo usuário (ex.: `2026-09-16`)
+- `terms_version`
 - `privacy_consent`
 - `privacy_consent_at`
 - `privacy_policy_version`
 - `published_at` — preenchido na aprovação ou no cadastro direto pelo Admin
-- `expires_at` — `published_at` + 90 dias (controle interno; **não há exclusão automática nesta versão**)
+- `expires_at` — `published_at` + 6 meses de calendário
 
-Colunas adicionadas em `vagas` (nullable, sem backfill):
+Colunas em `vagas` (nullable, sem backfill):
 
 - `terms_accepted`
 - `terms_accepted_at`
 - `terms_version`
 
-Cadastros públicos novos gravam o aceite. Cadastros anteriores e cadastros feitos pelo Admin permanecem com esses campos `NULL`.
+As vagas **não** usam o prazo de 6 meses. Seguem a validade própria da plataforma.
 
-Não existe rotina de exclusão automática de Talentos no código. Foto e currículo continuam em Base64 nas colunas `image` e `cv_url` (sem Supabase Storage).
+### Fase 2 — Negócios, Depoimentos e correção do prazo dos Talentos
+
+Script: `SUPABASE_LGPD_CONSENT_FASE2.sql` (executar no SQL Editor do Supabase **antes** do deploy da Fase 2).
+
+Colunas em `negocios` (nullable, sem default, sem backfill):
+
+- `terms_accepted`, `terms_accepted_at`, `terms_version`
+- `privacy_consent`, `privacy_consent_at`, `privacy_policy_version`
+- `published_at`, `expires_at` — preenchidos na aprovação ou no cadastro direto publicado pelo Admin; o cadastro público pendente **não** inicia o prazo
+
+Colunas em `testimonials` (nullable, sem default, sem backfill):
+
+- `terms_accepted`, `terms_accepted_at`, `terms_version`
+- `privacy_consent`, `privacy_consent_at`, `privacy_policy_version`
+
+Depoimentos **não** possuem `published_at`/`expires_at` nem expiração automática.
+
+O mesmo script recalcula, somente para Talentos que já têm `published_at` e `expires_at` preenchidos:
+
+`expires_at = published_at + interval '6 months'`
+
+Não altera `published_at`, consentimento, status nem registros com janela NULL.
+
+### Listagem pública (Talentos e Negócios)
+
+Exibidos quando `status = 'active'` e (`expires_at IS NULL` ou `expires_at > now()`). Não há cron nem exclusão física. O Admin continua vendo o registro.
+
+Não existe rotina de exclusão automática. Foto, currículo, logo e anexos continuam em Base64 nas colunas do banco (sem Supabase Storage).
 

@@ -30,6 +30,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import { maskPhone } from '@/lib/utils';
+import { LEGAL_VERSION } from '@/lib/legal';
 
 export default function CadastrarNegocioPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -56,6 +57,9 @@ export default function CadastrarNegocioPage() {
   });
   const [attachmentName, setAttachmentName] = useState('');
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [consentError, setConsentError] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const attachmentInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -165,6 +169,12 @@ export default function CadastrarNegocioPage() {
       }
     }
 
+    if (!termsAccepted || !privacyConsent) {
+      setConsentError('Para enviar, é necessário marcar as duas confirmações abaixo.');
+      return;
+    }
+
+    setConsentError('');
     setShowConfirmModal(true);
   };
 
@@ -173,6 +183,7 @@ export default function CadastrarNegocioPage() {
     setIsLoading(true);
 
     try {
+      const acceptedAt = new Date().toISOString();
       const { error } = await supabase
         .from('negocios')
         .insert([{
@@ -188,7 +199,13 @@ export default function CadastrarNegocioPage() {
           description: formData.description || null,
           attachment_url: formData.attachment_url || null,
           logo_url: formData.logo_url || null,
-          status: 'pending'
+          status: 'pending',
+          terms_accepted: true,
+          terms_accepted_at: acceptedAt,
+          terms_version: LEGAL_VERSION,
+          privacy_consent: true,
+          privacy_consent_at: acceptedAt,
+          privacy_policy_version: LEGAL_VERSION,
         }]);
 
       if (error) {
@@ -575,6 +592,56 @@ export default function CadastrarNegocioPage() {
                     ))}
                   </div>
                 </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-[#00628c]/15 bg-[#00628c]/5 p-5 space-y-2">
+              <h2 className="text-sm font-black uppercase tracking-widest text-[#00628c]">As informações aprovadas poderão ser públicas</h2>
+              <p className="text-sm text-[#3e4850] leading-relaxed">
+                Após aprovação pela equipe da Corrente do Bem, as informações deste negócio poderão ser exibidas publicamente para visitantes e pessoas interessadas, por até 6 meses após a aprovação. Isso inclui, quando informados: nome do negócio, título, localização, tipo, área, descrição, site/redes, logo, e-mail, telefone/WhatsApp e arquivos enviados para divulgação. O nome do responsável é usado internamente pela equipe e não é exibido na página pública. A equipe pode despublicar antes desse prazo, nos termos da Política de Privacidade e dos Termos de Uso.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/40"
+                  checked={termsAccepted}
+                  onChange={(e) => {
+                    setTermsAccepted(e.target.checked);
+                    setConsentError('');
+                  }}
+                />
+                <span className="text-sm text-[#3e4850] leading-relaxed">
+                  Li e concordo com os{' '}
+                  <Link href="/termos" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00628c] underline underline-offset-2">
+                    Termos de Uso
+                  </Link>{' '}
+                  e declaro que as informações fornecidas são verdadeiras e que possuo autorização para divulgar este negócio, oportunidade e os materiais enviados.
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/40"
+                  checked={privacyConsent}
+                  onChange={(e) => {
+                    setPrivacyConsent(e.target.checked);
+                    setConsentError('');
+                  }}
+                />
+                <span className="text-sm text-[#3e4850] leading-relaxed">
+                  Autorizo a Corrente do Bem a tratar e, após aprovação, publicar as informações deste cadastro destinadas à divulgação, incluindo dados de contato (e-mail e telefone, quando informados), logo e arquivos enviados, por até 6 meses, conforme a{' '}
+                  <Link href="/privacidade" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00628c] underline underline-offset-2">
+                    Política de Privacidade
+                  </Link>.
+                </span>
+              </label>
+
+              {consentError && (
+                <p className="text-sm font-bold text-red-600">{consentError}</p>
               )}
             </div>
 
