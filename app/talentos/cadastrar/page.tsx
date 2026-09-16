@@ -24,6 +24,7 @@ const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 import 'react-quill-new/dist/quill.snow.css';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '@/lib/supabase';
+import { LEGAL_VERSION } from '@/lib/legal';
 import Link from 'next/link';
 import Image from 'next/image';
 import { maskPhone } from '@/lib/utils';
@@ -52,6 +53,9 @@ export default function CadastrarTalentoPage() {
   const [skillInput, setSkillInput] = useState('');
   const [resumeName, setResumeName] = useState('');
   const [resumes, setResumes] = useState<{ name: string; url: string }[]>([]);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [consentError, setConsentError] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const resumeInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -177,6 +181,12 @@ export default function CadastrarTalentoPage() {
       return;
     }
 
+    if (!termsAccepted || !privacyConsent) {
+      setConsentError('Para enviar o cadastro, é necessário marcar as duas confirmações abaixo.');
+      return;
+    }
+
+    setConsentError('');
     setShowConfirmModal(true);
   };
 
@@ -185,11 +195,18 @@ export default function CadastrarTalentoPage() {
     setIsLoading(true);
 
     try {
+      const acceptedAt = new Date().toISOString();
       const { resume_url, ...rest } = formData;
       const submissionData = {
         ...rest,
         cv_url: resume_url,
-        status: 'pending'
+        status: 'pending',
+        terms_accepted: true,
+        terms_accepted_at: acceptedAt,
+        terms_version: LEGAL_VERSION,
+        privacy_consent: true,
+        privacy_consent_at: acceptedAt,
+        privacy_policy_version: LEGAL_VERSION,
       };
 
       console.log('Enviando dados:', submissionData);
@@ -567,6 +584,56 @@ export default function CadastrarTalentoPage() {
                   </span>
                 ))}
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#00628c]/15 bg-[#00628c]/5 p-5 space-y-2">
+              <h2 className="text-sm font-black uppercase tracking-widest text-[#00628c]">Seu perfil será público</h2>
+              <p className="text-sm text-[#3e4850] leading-relaxed">
+                Após aprovação pela equipe da Corrente do Bem, as informações deste cadastro poderão ser visualizadas por visitantes, empresas e recrutadores. Isso inclui seus dados de contato e o currículo enviado.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/40"
+                  checked={termsAccepted}
+                  onChange={(e) => {
+                    setTermsAccepted(e.target.checked);
+                    setConsentError('');
+                  }}
+                />
+                <span className="text-sm text-[#3e4850] leading-relaxed">
+                  Li e concordo com os{' '}
+                  <Link href="/termos" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00628c] underline underline-offset-2">
+                    Termos de Uso
+                  </Link>{' '}
+                  e declaro que as informações fornecidas são verdadeiras e de minha responsabilidade.
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/40"
+                  checked={privacyConsent}
+                  onChange={(e) => {
+                    setPrivacyConsent(e.target.checked);
+                    setConsentError('');
+                  }}
+                />
+                <span className="text-sm text-[#3e4850] leading-relaxed">
+                  Autorizo expressamente a Corrente do Bem a tratar e publicar os dados enviados neste cadastro, incluindo meu nome, foto, localização, e-mail, telefone, informações profissionais e currículo/PDF completo. Estou ciente de que, após aprovação, essas informações ficarão publicamente acessíveis na internet pelo período informado na{' '}
+                  <Link href="/privacidade" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00628c] underline underline-offset-2">
+                    Política de Privacidade
+                  </Link>.
+                </span>
+              </label>
+
+              {consentError && (
+                <p className="text-sm font-bold text-red-600">{consentError}</p>
+              )}
             </div>
 
             <button 

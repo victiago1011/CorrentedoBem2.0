@@ -75,9 +75,10 @@ Páginas acessíveis a qualquer visitante:
 Formulários onde qualquer pessoa pode enviar conteúdo. Todos seguem o mesmo fluxo:
 
 1. Usuário preenche o formulário
-2. Dados são salvos no Supabase com `status: pending`
-3. Um e-mail de notificação é enviado ao administrador
-4. Admin aprova ou rejeita no painel
+2. Cadastros de Talentos e Vagas exigem confirmações de Termos/Privacidade (desmarcadas por padrão)
+3. Dados são salvos no Supabase com `status: pending`
+4. Um e-mail de notificação é enviado ao administrador
+5. Admin aprova ou rejeita no painel
 
 ### 3. Painel Administrativo
 

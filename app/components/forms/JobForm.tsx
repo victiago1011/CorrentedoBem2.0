@@ -19,6 +19,7 @@ import dynamic from 'next/dynamic';
 import 'react-quill-new/dist/quill.snow.css';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { maskPhone, maskCurrency } from '@/lib/utils';
 
 const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
@@ -103,6 +104,8 @@ export default function JobForm({
     requirements: initialValues?.requirements ?? DEFAULT_VALUES.requirements,
   });
   const [reqInput, setReqInput] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [consentError, setConsentError] = useState('');
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>(() => {
     if (!initialValues?.attachment_url) return [];
     try {
@@ -226,6 +229,11 @@ export default function JobForm({
         alert('Por favor, insira um e-mail válido.');
         return;
       }
+    }
+
+    if (mode === 'public' && !termsAccepted) {
+      setConsentError('Para anunciar a vaga, é necessário concordar com os Termos de Uso e a Política de Privacidade.');
+      return;
     }
 
     await onSubmit({
@@ -604,6 +612,36 @@ export default function JobForm({
           </div>
         )}
       </div>
+
+      {mode === 'public' && (
+        <div className="space-y-3">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-[#bec8d1] text-[#00628c] focus:ring-[#00628c]/40"
+              checked={termsAccepted}
+              onChange={(e) => {
+                setTermsAccepted(e.target.checked);
+                setConsentError('');
+              }}
+            />
+            <span className="text-sm text-[#3e4850] leading-relaxed">
+              Li e concordo com os{' '}
+              <Link href="/termos" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00628c] underline underline-offset-2">
+                Termos de Uso
+              </Link>{' '}
+              e com a{' '}
+              <Link href="/privacidade" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00628c] underline underline-offset-2">
+                Política de Privacidade
+              </Link>{' '}
+              e declaro possuir autorização para divulgar esta oportunidade e as informações da empresa informada.
+            </span>
+          </label>
+          {consentError && (
+            <p className="text-sm font-bold text-red-600">{consentError}</p>
+          )}
+        </div>
+      )}
 
       {mode === 'admin' && onCancel ? (
         <div className="flex gap-3 pt-2">

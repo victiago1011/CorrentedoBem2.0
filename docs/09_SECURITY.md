@@ -106,6 +106,9 @@ sem planejamento.
 
 Toda alteração estrutural deve ser documentada.
 
+Consentimento de Talentos e Vagas: campos nullable, sem backfill. Versão legal em `lib/legal.ts`. Não coletar IP ou fingerprint para o aceite.
+
+
 ---
 
 # API Routes

@@ -57,6 +57,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn, maskCurrency, maskPhone, ensureExternalLink, stripHtml } from '@/lib/utils';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
+import { getTalentPublicationWindow } from '@/lib/legal';
 import { useRouter } from 'next/navigation';
 
 import Link from 'next/link';
@@ -183,9 +184,12 @@ interface Candidate {
   cv_url?: string;
   verified?: boolean;
   created_at?: string;
+  privacy_consent?: boolean | null;
+  published_at?: string | null;
+  expires_at?: string | null;
 }
 
-const TALENT_LIST_FIELDS = 'id, name, email, phone, location, area, role, summary, skills, status, verified, created_at';
+const TALENT_LIST_FIELDS = 'id, name, email, phone, location, area, role, summary, skills, status, verified, created_at, published_at';
 const GALLERY_PAGE_SIZE = 8;
 
 const sanitizeTalentSearchTerm = (raw: string) =>
@@ -1310,9 +1314,16 @@ export default function Dashboard() {
     const cand = findCandidateById(id);
     if (!cand) return;
 
+    const updatePayload: { status: string; published_at?: string; expires_at?: string } = {
+      status: 'active',
+    };
+    if (!cand.published_at) {
+      Object.assign(updatePayload, getTalentPublicationWindow());
+    }
+
     const { data, error } = await supabase
       .from('talentos')
-      .update({ status: 'active' })
+      .update(updatePayload)
       .eq('id', id)
       .select(TALENT_LIST_FIELDS);
 
@@ -1694,6 +1705,7 @@ export default function Dashboard() {
       return;
     }
 
+    const publication = getTalentPublicationWindow();
     const candData = {
       name: formData.get('name') as string,
       email: email,
@@ -1705,7 +1717,9 @@ export default function Dashboard() {
       skills: candSkills,
       image: candImage,
       cv_url: candResumes.length > 0 ? JSON.stringify(candResumes) : '',
-      status: 'active'
+      status: 'active',
+      published_at: publication.published_at,
+      expires_at: publication.expires_at,
     };
 
     const { data, error } = await supabase
@@ -4150,6 +4164,11 @@ export default function Dashboard() {
                     <div>
                       <h3 className="text-xl lg:text-2xl font-extrabold text-on-surface leading-tight font-headline">{selectedCandidate.name}</h3>
                       <p className="text-on-surface-variant font-medium text-xs lg:text-sm">{selectedCandidate.role}</p>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                        {selectedCandidate.privacy_consent === true
+                          ? 'Consentimento registrado'
+                          : 'Consentimento não registrado'}
+                      </p>
                       <div className="flex gap-3 mt-3">
                         <ExternalLink className="w-4 h-4 text-primary cursor-pointer hover:scale-110 transition-transform" />
                         <Share2 className="w-4 h-4 text-primary cursor-pointer hover:scale-110 transition-transform" />

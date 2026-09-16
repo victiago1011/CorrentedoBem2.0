@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import JobForm, { type JobFormValues } from '@/app/components/forms/JobForm';
+import { LEGAL_VERSION } from '@/lib/legal';
 
 export default function CadastrarVagaPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -31,6 +32,9 @@ export default function CadastrarVagaPage() {
           logo_url: formData.logo_url || null,
           requirements: formData.requirements,
           status: 'pending',
+          terms_accepted: true,
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: LEGAL_VERSION,
         },
       ]);
 

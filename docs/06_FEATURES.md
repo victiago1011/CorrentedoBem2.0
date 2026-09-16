@@ -53,6 +53,8 @@ O visitante pode:
 - visualizar detalhes
 - candidatar-se
 
+O cadastro público em `/vagas/cadastrar` exige aceite dos Termos de Uso e da Política de Privacidade, com declaração de autorização para divulgar a vaga.
+
 ---
 
 ## Talentos
@@ -63,7 +65,9 @@ O visitante pode:
 
 - pesquisar
 - filtrar
-- visualizar perfil
+- visualizar perfil (incluindo e-mail, telefone e currículo após aprovação)
+
+O cadastro público em `/talentos/cadastrar` exige duas confirmações desmarcadas por padrão: aceite dos Termos de Uso e autorização expressa de publicação pública. O aceite é gravado com data e versão. Não há backfill de consentimento em registros antigos.
 
 ---
 
@@ -117,6 +121,8 @@ Fluxo atual:
 
 A mensagem **não** é salva no banco de dados.
 
+O formulário inclui o assunto “Solicitar alteração ou exclusão de currículo ou vaga”. Esse é o canal inicial para pedidos de correção, despublicação ou exclusão. O e-mail real de atendimento é `robinho@correntedobembr.com.br`.
+
 Não existe view “Mensagens de Contato” no painel administrativo.
 
 ---
@@ -150,6 +156,8 @@ Permite:
 - rejeitar
 - editar
 - excluir
+
+Na aprovação, o painel registra `published_at` e `expires_at` quando ainda não existirem. O detalhe mostra se o consentimento foi registrado.
 
 ---
 

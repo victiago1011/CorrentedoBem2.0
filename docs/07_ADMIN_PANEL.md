@@ -40,3 +40,16 @@ Fluxo atual:
 supabase.auth.signInWithPassword()
 ↓
 /admin
+
+---
+
+# Talentos
+
+Na aprovação de um currículo, se `published_at` estiver vazio, o painel grava `published_at` e `expires_at` (90 dias). Isso é controle interno; a galeria pública continua usando apenas `status = active`.
+
+No detalhe do currículo, o painel indica:
+
+- Consentimento registrado (`privacy_consent = true`)
+- Consentimento não registrado (`NULL`)
+
+Cadastros criados pelo Admin não preenchem campos de aceite.

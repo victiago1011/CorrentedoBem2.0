@@ -5,6 +5,7 @@ import { Navbar } from '@/app/components/Navbar';
 import { Shield, Lock, Eye, FileText, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
+import { LEGAL_VERSION } from '@/lib/legal';
 
 export default function PrivacidadePage() {
   return (
@@ -30,54 +31,147 @@ export default function PrivacidadePage() {
             </div>
 
             <div className="prose prose-slate max-w-none space-y-6 text-[#3e4850] leading-relaxed">
+              <p>
+                Esta Política descreve como a Corrente do Bem trata dados pessoais no site correntedobembr.com.br.
+              </p>
+
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c] flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-[#00628c]" /> 1. Introdução
+                  <Lock className="w-5 h-5 text-[#00628c]" /> 1. Quem somos
                 </h2>
                 <p>
-                  A Corrente do Bem valoriza a sua privacidade. Esta política descreve como coletamos, usamos e protegemos as informações fornecidas por candidatos, empresas e parceiros que utilizam nossa plataforma de recolocação benéfica.
+                  A Corrente do Bem é uma iniciativa de impacto social que conecta pessoas, vagas, talentos e negócios com propósito. Não somos uma agência de emprego nem garantimos contratação. Atuamos como ponte, com moderação humana.
                 </p>
               </section>
 
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c] flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-[#00628c]" /> 2. Coleta de Informações
+                  <Eye className="w-5 h-5 text-[#00628c]" /> 2. Dados tratados
                 </h2>
-                <p>Coletamos informações necessárias para facilitar a sua jornada profissional, incluindo:</p>
+                <p>Conforme o uso da plataforma, podemos tratar:</p>
                 <ul className="list-disc pl-6 space-y-2">
-                  <li>Dados cadastrais (Nome, e-mail, telefone);</li>
-                  <li>Informações profissionais (currículo, experiências, habilidades);</li>
-                  <li>Dados de localização para vagas pertinentes à sua região.</li>
+                  <li>identificação e contato (nome, e-mail, telefone);</li>
+                  <li>dados profissionais (área, cargo, resumo, habilidades, currículo);</li>
+                  <li>localização informada;</li>
+                  <li>dados de vagas e negócios (empresa, descrição, anexos, logo);</li>
+                  <li>depoimentos;</li>
+                  <li>e-mails de newsletter, quando houver inscrição;</li>
+                  <li>mensagens enviadas pelo formulário de contato (encaminhadas por e-mail, sem gravação no banco pela aplicação);</li>
+                  <li>dados técnicos básicos de visita (analytics de páginas), quando aplicável.</li>
                 </ul>
               </section>
 
               <section>
-                <h2 className="text-xl font-bold text-[#1b1c1c] flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-[#00628c]" /> 3. Uso dos Dados
-                </h2>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">3. Talentos</h2>
                 <p>
-                  Seus dados são utilizados exclusivamente para:
+                  O cadastro é voluntário. Após análise da equipe, o perfil pode ser publicado na Galeria. Ficam públicos, se aprovados: nome; foto (se enviada); cidade/localização; área; cargo/função; resumo; habilidades; e-mail; telefone; currículo/PDF completo para visualização e download.
                 </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">4. Vagas</h2>
+                <p>
+                  Empresas e pessoas autorizadas podem cadastrar oportunidades. Após aprovação, a vaga e os contatos informados podem ficar públicos.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">5. Negócios</h2>
+                <p>
+                  Oportunidades cadastradas passam por moderação e, se aprovadas, podem ser exibidas publicamente com os dados de contato fornecidos.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">6. Newsletter</h2>
+                <p>
+                  Quando alguém é inscrito para comunicações, o e-mail é usado para envio de campanhas, com possibilidade de descadastro pelos meios disponíveis na mensagem ou no site.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">7. Formulário de contato</h2>
+                <p>
+                  A mensagem é enviada à equipe no e-mail robinho@correntedobembr.com.br, usando o e-mail do remetente como resposta. Não salvamos essa mensagem no banco de dados da aplicação.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">8. Finalidades</h2>
+                <p>Utilizamos os dados para:</p>
                 <ul className="list-disc pl-6 space-y-2">
-                  <li>Apresentar seu perfil para empresas parceiras;</li>
-                  <li>Notificar você sobre novas oportunidades de emprego;</li>
-                  <li>Manter a segurança e integridade da nossa rede de amizades profissional.</li>
+                  <li>viabilizar a conexão entre talentos, empresas e a comunidade;</li>
+                  <li>moderar conteúdo;</li>
+                  <li>operar o site;</li>
+                  <li>enviar comunicações solicitadas;</li>
+                  <li>cumprir deveres legais quando existirem.</li>
                 </ul>
               </section>
 
               <section>
                 <h2 className="text-xl font-bold text-[#1b1c1c] flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-[#00628c]" /> 4. Proteção de Dados
+                  <FileText className="w-5 h-5 text-[#00628c]" /> 9. Publicação pública dos Talentos
                 </h2>
                 <p>
-                  Implementamos medidas técnicas e organizacionais de segurança para proteger seus dados contra acessos não autorizados ou uso indevido. Seus dados nunca são vendidos a terceiros.
+                  Ao autorizar no cadastro de Talento, a pessoa concorda que, após aprovação, nome, foto, localização, e-mail, telefone, informações profissionais e o currículo completo ficam acessíveis na internet. Terceiros podem visualizar, baixar, armazenar, compartilhar e manter cópias. A Corrente do Bem pode remover as informações dos seus próprios sistemas quando cabível, mas não consegue garantir a exclusão de cópias feitas por terceiros nem de conteúdos já indexados ou em cache fora do seu controle.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">10. Moderação</h2>
+                <p>
+                  Cadastros entram como pendentes e só são publicados após análise. A equipe poderá recusar, despublicar ou excluir conteúdos que violem os Termos, esta Política ou a legislação aplicável.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">11. Permanência da publicação</h2>
+                <p>
+                  O perfil aprovado permanece público enquanto estiver ativo na plataforma. Hoje a retirada ocorre por pedido do titular, pelos canais abaixo, ou por decisão de moderação. Se no futuro for adotado um prazo máximo de publicação, esta Política será atualizada antes ou no momento em que essa prática passar a valer.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">12. Direitos do titular</h2>
+                <p>
+                  O titular pode solicitar confirmação de tratamento, correção, atualização, despublicação ou exclusão, e revogar o consentimento para tratamentos futuros baseados nesse fundamento, na medida aplicável.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">13. Correção, exclusão e revogação</h2>
+                <p>
+                  Pedidos: formulário em <Link href="/contato" className="font-bold text-[#00628c] underline underline-offset-2">/contato</Link> ou e-mail robinho@correntedobembr.com.br, identificando-se e descrevendo o pedido. A revogação não apaga cópias já obtidas por terceiros enquanto o conteúdo esteve público.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">14. Prestadores tecnológicos</h2>
+                <p>
+                  Hospedagem e banco (Supabase/PostgreSQL); hospedagem do site (Vercel); e-mails (Resend); DNS (Cloudflare), conforme a operação atual.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c] flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-[#00628c]" /> 15. Segurança
+                </h2>
+                <p>
+                  Adotamos medidas compatíveis com o porte da iniciativa (acesso administrativo autenticado, HTTPS, moderação). Nenhum sistema é isento de risco.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-bold text-[#1b1c1c]">16. Atualizações</h2>
+                <p>
+                  Esta Política pode ser alterada. A versão vigente será a publicada nesta página, com a data de atualização.
                 </p>
               </section>
 
               <section className="pt-8 border-t border-[#f6f3f2]">
                 <p className="text-sm italic">
-                  Última atualização: 06 de Maio de 2026. <br />
-                  Dúvidas sobre sua privacidade? Entre em contato conosco.
+                  Versão {LEGAL_VERSION}. <br />
+                  Dúvidas: <Link href="/contato" className="font-bold text-[#00628c] not-italic">formulário de contato</Link> ou robinho@correntedobembr.com.br.
                 </p>
               </section>
             </div>

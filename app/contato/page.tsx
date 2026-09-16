@@ -145,6 +145,9 @@ export default function ContatoPage() {
                   <div>
                     <div className="text-xs font-black uppercase tracking-widest text-[#6f7881] mb-1">E-mail Direto</div>
                     <div className="text-lg font-bold text-[#1b1c1c]">robinho@correntedobembr.com.br</div>
+                    <p className="text-xs text-[#6f7881] mt-2 max-w-sm leading-relaxed">
+                      Para solicitar correção, despublicação ou exclusão de currículo ou vaga, use o formulário ao lado com o assunto correspondente ou escreva para este e-mail.
+                    </p>
                   </div>
                 </div>
                 
@@ -241,6 +244,7 @@ export default function ContatoPage() {
                         onChange={(e) => setFormData({...formData, assunto: e.target.value})}
                       >
                         <option>Dúvida Geral</option>
+                        <option>Solicitar alteração ou exclusão de currículo ou vaga</option>
                         <option>Sugestão para a Corrente</option>
                         <option>Quero me tornar Ativo</option>
                         <option>Problemas com o site</option>
