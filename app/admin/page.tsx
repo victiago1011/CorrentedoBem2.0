@@ -178,7 +178,15 @@ interface Candidate {
 }
 
 const TALENT_LIST_FIELDS = 'id, name, email, phone, location, area, role, summary, skills, status, verified, created_at, published_at';
+const JOB_LIST_FIELDS = 'id, title, company, location, type, area, status, created_at, logo_url, verified, contact_email, email, phone, contact_phone';
+const NEGOCIO_LIST_FIELDS = 'id, title, owner_name, location, type, area, status, created_at, logo_url, contact_email, contact_name, published_at';
+const NEGOCIO_GALLERY_FIELDS = `${NEGOCIO_LIST_FIELDS}, description`;
+const TESTIMONIAL_LIST_FIELDS = 'id, name, role, company, email, content, photo_url, status, created_at';
+const NEWS_LIST_FIELDS = 'id, title, slug, excerpt, image_url, author, category, status, published_at, created_at';
+const HISTORY_LIST_FIELDS = 'id, action, details, created_at';
+const SETTINGS_FIELDS = 'id, platform_name, contact_email, manual_approval, auto_notifications';
 const GALLERY_PAGE_SIZE = 8;
+const HISTORY_PAGE_SIZE = 50;
 
 const sanitizeTalentSearchTerm = (raw: string) =>
   raw
@@ -196,6 +204,30 @@ const toTalentListItem = (row: Candidate): Candidate => {
     skills: Array.isArray(rest.skills) ? rest.skills : [],
   };
 };
+
+const toJobListItem = (row: Job): Job => ({
+  ...row,
+  description: '',
+  requirements: [],
+  salary: row.salary || '',
+});
+
+const toNegocioListItem = (row: Negocio): Negocio => ({
+  ...row,
+  description: row.description || '',
+});
+
+const toNewsListItem = (row: Noticia): Noticia => ({
+  ...row,
+  content: '',
+});
+
+const AreaLoadingSkeleton = ({ label }: { label: string }) => (
+  <div className="flex flex-col items-center justify-center gap-3 py-16 text-on-surface-variant">
+    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+    <p className="text-xs font-bold uppercase tracking-widest text-primary">{label}</p>
+  </div>
+);
 
 const normalizeTalentRecord = (row: Candidate): Candidate => ({
   ...row,
@@ -528,6 +560,8 @@ export default function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [galleryJobs, setGalleryJobs] = useState<Job[]>([]);
+  const [rejectedJobs, setRejectedJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [galleryTalents, setGalleryTalents] = useState<Candidate[]>([]);
   const [galleryPage, setGalleryPage] = useState(1);
@@ -536,23 +570,79 @@ export default function Dashboard() {
   const [rejectedCandidates, setRejectedCandidates] = useState<Candidate[]>([]);
   const [isLoadingRejected, setIsLoadingRejected] = useState(false);
   const [loadingTalentId, setLoadingTalentId] = useState<string | number | null>(null);
+  const [loadingJobId, setLoadingJobId] = useState<string | number | null>(null);
+  const [loadingNegocioId, setLoadingNegocioId] = useState<string | number | null>(null);
+  const [loadingNoticiaId, setLoadingNoticiaId] = useState<string | number | null>(null);
   const [negocios, setNegocios] = useState<Negocio[]>([]);
+  const [galleryNegocios, setGalleryNegocios] = useState<Negocio[]>([]);
+  const [rejectedNegocios, setRejectedNegocios] = useState<Negocio[]>([]);
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [approvedTestimonials, setApprovedTestimonials] = useState<Testimonial[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [isLoadingJobs, setIsLoadingJobs] = useState(true);
+  const [isLoadingCandidates, setIsLoadingCandidates] = useState(true);
+  const [isLoadingNegocios, setIsLoadingNegocios] = useState(true);
+  const [isLoadingTestimonials, setIsLoadingTestimonials] = useState(true);
+  const [isLoadingApprovedTestimonials, setIsLoadingApprovedTestimonials] = useState(false);
+  const [isLoadingGalleryJobs, setIsLoadingGalleryJobs] = useState(false);
+  const [isLoadingGalleryNegocios, setIsLoadingGalleryNegocios] = useState(false);
+  const [isLoadingRejectedJobs, setIsLoadingRejectedJobs] = useState(false);
+  const [isLoadingRejectedNegocios, setIsLoadingRejectedNegocios] = useState(false);
+  const [isLoadingNoticias, setIsLoadingNoticias] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [fetchErrors, setFetchErrors] = useState<{
     jobs?: string;
     candidates?: string;
     gallery?: string;
+    galleryJobs?: string;
+    galleryNegocios?: string;
     rejected?: string;
+    rejectedJobs?: string;
+    rejectedNegocios?: string;
     negocios?: string;
     noticias?: string;
     testimonials?: string;
+    approvedTestimonials?: string;
     history?: string;
     settings?: string;
   }>({});
-  const fetchGenerationRef = React.useRef(0);
+  const loadedAreasRef = React.useRef({
+    pendingJobs: false,
+    pendingCandidates: false,
+    pendingNegocios: false,
+    pendingTestimonials: false,
+    approvedTestimonials: false,
+    galleryJobs: false,
+    galleryNegocios: false,
+    rejectedJobs: false,
+    rejectedNegocios: false,
+    rejectedTalents: false,
+    noticias: false,
+    history: false,
+    settings: false,
+  });
+  const pendingJobsFetchRef = React.useRef(0);
+  const pendingCandidatesFetchRef = React.useRef(0);
+  const pendingNegociosFetchRef = React.useRef(0);
+  const pendingTestimonialsFetchRef = React.useRef(0);
+  const approvedTestimonialsFetchRef = React.useRef(0);
+  const galleryJobsFetchRef = React.useRef(0);
+  const galleryNegociosFetchRef = React.useRef(0);
+  const rejectedJobsFetchRef = React.useRef(0);
+  const rejectedNegociosFetchRef = React.useRef(0);
+  const noticiasFetchRef = React.useRef(0);
+  const historyFetchRef = React.useRef(0);
+  const settingsFetchRef = React.useRef(0);
+  const jobDetailFetchRef = React.useRef(0);
+  const negocioDetailFetchRef = React.useRef(0);
+  const noticiaDetailFetchRef = React.useRef(0);
+  const historyFetchedCountRef = React.useRef(0);
+  const galleryTalentsQueryKeyRef = React.useRef('');
   const galleryFetchRef = React.useRef(0);
   const rejectedFetchRef = React.useRef(0);
   const talentDetailFetchRef = React.useRef(0);
@@ -824,20 +914,22 @@ export default function Dashboard() {
     );
   };
 
-  const renderDataFetchError = (message?: string, onRetry?: () => void) => {
-    if (!message || isLoading) return null;
+  const renderDataFetchError = (message?: string, onRetry?: () => void, isRetrying?: boolean) => {
+    if (!message) return null;
 
     return (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
         <p className="font-medium">{message} Os dados anteriores foram mantidos quando disponíveis.</p>
-        <button
-          type="button"
-          onClick={() => (onRetry ? onRetry() : fetchData())}
-          disabled={isLoading}
-          className="shrink-0 px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold transition-all active:scale-95 disabled:opacity-60"
-        >
-          Tentar novamente
-        </button>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={() => onRetry()}
+            disabled={isRetrying}
+            className="shrink-0 px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold transition-all active:scale-95 disabled:opacity-60"
+          >
+            Tentar novamente
+          </button>
+        )}
       </div>
     );
   };
@@ -854,7 +946,49 @@ export default function Dashboard() {
     );
   }, [candidates, galleryTalents, rejectedCandidates, selectedCandidate, editingCandidate]);
 
-  const fetchGalleryTalents = React.useCallback(async (search: string, category: string, page: number) => {
+  const findJobById = React.useCallback((id: string | number) => {
+    const match = (j: Job) => String(j.id) === String(id);
+    return (
+      jobs.find(match) ||
+      galleryJobs.find(match) ||
+      rejectedJobs.find(match) ||
+      (selectedJob && match(selectedJob) ? selectedJob : null) ||
+      (editingJob && match(editingJob) ? editingJob : null) ||
+      null
+    );
+  }, [jobs, galleryJobs, rejectedJobs, selectedJob, editingJob]);
+
+  const findNegocioById = React.useCallback((id: string | number) => {
+    const match = (n: Negocio) => String(n.id) === String(id);
+    return (
+      negocios.find(match) ||
+      galleryNegocios.find(match) ||
+      rejectedNegocios.find(match) ||
+      (selectedNegocio && match(selectedNegocio) ? selectedNegocio : null) ||
+      (editingNegocio && match(editingNegocio) ? editingNegocio : null) ||
+      null
+    );
+  }, [negocios, galleryNegocios, rejectedNegocios, selectedNegocio, editingNegocio]);
+
+  const findTestimonialById = React.useCallback((id: string | number) => {
+    const match = (t: Testimonial) => String(t.id) === String(id);
+    return (
+      testimonials.find(match) ||
+      approvedTestimonials.find(match) ||
+      (selectedTestimonial && match(selectedTestimonial) ? selectedTestimonial : null) ||
+      null
+    );
+  }, [testimonials, approvedTestimonials, selectedTestimonial]);
+
+  const prependHistory = React.useCallback((entry: HistoryItem | null) => {
+    if (!entry) return;
+    setHistory(prev => [entry, ...prev]);
+  }, []);
+
+  const fetchGalleryTalents = React.useCallback(async (search: string, category: string, page: number, force = false) => {
+    const queryKey = `${search}|${category}|${page}`;
+    if (!force && galleryTalentsQueryKeyRef.current === queryKey) return;
+
     const requestId = ++galleryFetchRef.current;
     setIsLoadingGallery(true);
 
@@ -911,6 +1045,7 @@ export default function Dashboard() {
 
       setGalleryTalents(rows);
       setGalleryTotalCount(count || 0);
+      galleryTalentsQueryKeyRef.current = queryKey;
       setFetchErrors(prev => {
         if (!prev.gallery) return prev;
         const next = { ...prev };
@@ -928,7 +1063,9 @@ export default function Dashboard() {
     }
   }, []);
 
-  const fetchRejectedTalents = React.useCallback(async () => {
+  const fetchRejectedTalents = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.rejectedTalents) return;
+
     const requestId = ++rejectedFetchRef.current;
     setIsLoadingRejected(true);
 
@@ -952,6 +1089,7 @@ export default function Dashboard() {
       }
 
       setRejectedCandidates((data || []).map((row) => toTalentListItem(row as Candidate)));
+      loadedAreasRef.current.rejectedTalents = true;
       setFetchErrors(prev => {
         if (!prev.rejected) return prev;
         const next = { ...prev };
@@ -1031,120 +1169,493 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Fetch Data
-  const fetchData = React.useCallback(async () => {
-    const requestId = ++fetchGenerationRef.current;
-    setIsLoading(true);
+  const logFetchError = (resource: string, error: { code?: string; message?: string; details?: string } | unknown) => {
+    if (error && typeof error === 'object' && 'message' in error) {
+      const typed = error as { code?: string; message?: string; details?: string };
+      console.error(`Erro ao carregar ${resource}:`, {
+        code: typed.code,
+        message: typed.message,
+        details: typed.details,
+      });
+      return;
+    }
+    console.error(`Erro ao carregar ${resource}:`, error);
+  };
 
+  const clearFetchError = React.useCallback((key: keyof typeof fetchErrors) => {
+    setFetchErrors(prev => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  const fetchPendingJobs = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.pendingJobs) return;
+    const requestId = ++pendingJobsFetchRef.current;
+    setIsLoadingJobs(true);
     try {
-      const [jobsRes, candidatesRes, negociosRes, noticiasRes, testimonialsRes, historyRes, settingsRes] = await Promise.all([
-        supabase.from('vagas').select('*').order('created_at', { ascending: false }),
-        supabase.from('talentos').select(TALENT_LIST_FIELDS).eq('status', 'pending').order('created_at', { ascending: false }),
-        supabase.from('negocios').select('*').order('created_at', { ascending: false }),
-        supabase.from('noticias').select('*').order('created_at', { ascending: false }),
-        supabase.from('testimonials').select('*').order('created_at', { ascending: false }),
-        supabase.from('history').select('*').order('created_at', { ascending: false }),
-        supabase.from('settings').select('*').maybeSingle(),
-      ]);
-
-      // Ignora respostas antigas se uma nova chamada já foi iniciada
-      if (requestId !== fetchGenerationRef.current) return;
-
-      const nextErrors: {
-        jobs?: string;
-        candidates?: string;
-        negocios?: string;
-        noticias?: string;
-        testimonials?: string;
-        history?: string;
-        settings?: string;
-      } = {};
-
-      const logFetchError = (resource: string, error: { code?: string; message?: string; details?: string }) => {
-        console.error(`Erro ao carregar ${resource}:`, {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-        });
-      };
-
-      if (jobsRes.error) {
-        logFetchError('vagas', jobsRes.error);
-        nextErrors.jobs = 'Não foi possível carregar as vagas.';
-      } else if (jobsRes.data) {
-        setJobs(jobsRes.data);
+      const { data, error } = await supabase
+        .from('vagas')
+        .select(JOB_LIST_FIELDS)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      if (requestId !== pendingJobsFetchRef.current) return;
+      if (error) {
+        logFetchError('vagas pendentes', error);
+        setFetchErrors(prev => ({ ...prev, jobs: 'Não foi possível carregar as vagas.' }));
+        return;
       }
-
-      if (candidatesRes.error) {
-        logFetchError('talentos', candidatesRes.error);
-        nextErrors.candidates = 'Não foi possível carregar os currículos.';
-      } else if (candidatesRes.data) {
-        setCandidates(candidatesRes.data.map((row) => toTalentListItem(row as Candidate)));
-      }
-
-      if (negociosRes.error) {
-        logFetchError('negocios', negociosRes.error);
-        nextErrors.negocios = 'Não foi possível carregar os negócios.';
-      } else if (negociosRes.data) {
-        setNegocios(negociosRes.data);
-      }
-
-      if (noticiasRes.error) {
-        logFetchError('noticias', noticiasRes.error);
-        nextErrors.noticias = 'Não foi possível carregar as notícias.';
-      } else if (noticiasRes.data) {
-        setNoticias(noticiasRes.data);
-      }
-
-      if (testimonialsRes.error) {
-        logFetchError('testimonials', testimonialsRes.error);
-        nextErrors.testimonials = 'Não foi possível carregar os depoimentos.';
-      } else if (testimonialsRes.data) {
-        setTestimonials(testimonialsRes.data);
-      }
-
-      if (historyRes.error) {
-        logFetchError('history', historyRes.error);
-        nextErrors.history = 'Não foi possível carregar o histórico.';
-      } else if (historyRes.data) {
-        setHistory(historyRes.data);
-      }
-
-      if (settingsRes.error) {
-        logFetchError('settings', settingsRes.error);
-        nextErrors.settings = 'Não foi possível carregar as configurações.';
-      } else if (settingsRes.data) {
-        setSettings(settingsRes.data);
-      }
-
-      setFetchErrors(prev => ({
-        ...nextErrors,
-        gallery: prev.gallery,
-        rejected: prev.rejected,
-      }));
-
-      if (Object.keys(nextErrors).length > 0) {
-        triggerToast('Erro ao carregar alguns dados. Tente novamente.', 'error');
-      }
+      setJobs((data || []).map((row) => toJobListItem(row as Job)));
+      loadedAreasRef.current.pendingJobs = true;
+      clearFetchError('jobs');
     } catch (error) {
-      if (requestId !== fetchGenerationRef.current) return;
-      console.error('Error fetching data:', error instanceof Error ? { message: error.message, name: error.name } : { message: 'unknown' });
-      setFetchErrors(prev => ({
-        jobs: 'Não foi possível carregar as vagas.',
-        candidates: 'Não foi possível carregar os currículos.',
-        negocios: 'Não foi possível carregar os negócios.',
-        noticias: 'Não foi possível carregar as notícias.',
-        testimonials: 'Não foi possível carregar os depoimentos.',
-        history: 'Não foi possível carregar o histórico.',
-        settings: 'Não foi possível carregar as configurações.',
-        gallery: prev.gallery,
-        rejected: prev.rejected,
-      }));
-      triggerToast('Erro ao carregar dados. Tente novamente.', 'error');
+      if (requestId !== pendingJobsFetchRef.current) return;
+      logFetchError('vagas pendentes', error);
+      setFetchErrors(prev => ({ ...prev, jobs: 'Não foi possível carregar as vagas.' }));
     } finally {
-      if (requestId === fetchGenerationRef.current) {
-        setIsLoading(false);
+      if (requestId === pendingJobsFetchRef.current) setIsLoadingJobs(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchPendingCandidates = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.pendingCandidates) return;
+    const requestId = ++pendingCandidatesFetchRef.current;
+    setIsLoadingCandidates(true);
+    try {
+      const { data, error } = await supabase
+        .from('talentos')
+        .select(TALENT_LIST_FIELDS)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      if (requestId !== pendingCandidatesFetchRef.current) return;
+      if (error) {
+        logFetchError('talentos pendentes', error);
+        setFetchErrors(prev => ({ ...prev, candidates: 'Não foi possível carregar os currículos.' }));
+        return;
       }
+      setCandidates((data || []).map((row) => toTalentListItem(row as Candidate)));
+      loadedAreasRef.current.pendingCandidates = true;
+      clearFetchError('candidates');
+    } catch (error) {
+      if (requestId !== pendingCandidatesFetchRef.current) return;
+      logFetchError('talentos pendentes', error);
+      setFetchErrors(prev => ({ ...prev, candidates: 'Não foi possível carregar os currículos.' }));
+    } finally {
+      if (requestId === pendingCandidatesFetchRef.current) setIsLoadingCandidates(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchPendingNegocios = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.pendingNegocios) return;
+    const requestId = ++pendingNegociosFetchRef.current;
+    setIsLoadingNegocios(true);
+    try {
+      const { data, error } = await supabase
+        .from('negocios')
+        .select(NEGOCIO_LIST_FIELDS)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      if (requestId !== pendingNegociosFetchRef.current) return;
+      if (error) {
+        logFetchError('negocios pendentes', error);
+        setFetchErrors(prev => ({ ...prev, negocios: 'Não foi possível carregar os negócios.' }));
+        return;
+      }
+      setNegocios((data || []).map((row) => toNegocioListItem(row as Negocio)));
+      loadedAreasRef.current.pendingNegocios = true;
+      clearFetchError('negocios');
+    } catch (error) {
+      if (requestId !== pendingNegociosFetchRef.current) return;
+      logFetchError('negocios pendentes', error);
+      setFetchErrors(prev => ({ ...prev, negocios: 'Não foi possível carregar os negócios.' }));
+    } finally {
+      if (requestId === pendingNegociosFetchRef.current) setIsLoadingNegocios(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchPendingTestimonials = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.pendingTestimonials) return;
+    const requestId = ++pendingTestimonialsFetchRef.current;
+    setIsLoadingTestimonials(true);
+    try {
+      const { data, error } = await supabase
+        .from('testimonials')
+        .select(TESTIMONIAL_LIST_FIELDS)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      if (requestId !== pendingTestimonialsFetchRef.current) return;
+      if (error) {
+        logFetchError('depoimentos pendentes', error);
+        setFetchErrors(prev => ({ ...prev, testimonials: 'Não foi possível carregar os depoimentos.' }));
+        return;
+      }
+      setTestimonials(data || []);
+      loadedAreasRef.current.pendingTestimonials = true;
+      clearFetchError('testimonials');
+    } catch (error) {
+      if (requestId !== pendingTestimonialsFetchRef.current) return;
+      logFetchError('depoimentos pendentes', error);
+      setFetchErrors(prev => ({ ...prev, testimonials: 'Não foi possível carregar os depoimentos.' }));
+    } finally {
+      if (requestId === pendingTestimonialsFetchRef.current) setIsLoadingTestimonials(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchApprovedTestimonials = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.approvedTestimonials) return;
+    const requestId = ++approvedTestimonialsFetchRef.current;
+    setIsLoadingApprovedTestimonials(true);
+    try {
+      const { data, error } = await supabase
+        .from('testimonials')
+        .select(TESTIMONIAL_LIST_FIELDS)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
+      if (requestId !== approvedTestimonialsFetchRef.current) return;
+      if (error) {
+        logFetchError('depoimentos aprovados', error);
+        setFetchErrors(prev => ({ ...prev, approvedTestimonials: 'Não foi possível carregar os depoimentos publicados.' }));
+        return;
+      }
+      setApprovedTestimonials(data || []);
+      loadedAreasRef.current.approvedTestimonials = true;
+      clearFetchError('approvedTestimonials');
+    } catch (error) {
+      if (requestId !== approvedTestimonialsFetchRef.current) return;
+      logFetchError('depoimentos aprovados', error);
+      setFetchErrors(prev => ({ ...prev, approvedTestimonials: 'Não foi possível carregar os depoimentos publicados.' }));
+    } finally {
+      if (requestId === approvedTestimonialsFetchRef.current) setIsLoadingApprovedTestimonials(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchGalleryJobs = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.galleryJobs) return;
+    const requestId = ++galleryJobsFetchRef.current;
+    setIsLoadingGalleryJobs(true);
+    try {
+      const { data, error } = await supabase
+        .from('vagas')
+        .select(JOB_LIST_FIELDS)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+      if (requestId !== galleryJobsFetchRef.current) return;
+      if (error) {
+        logFetchError('galeria de vagas', error);
+        setFetchErrors(prev => ({ ...prev, galleryJobs: 'Não foi possível carregar a galeria de vagas.' }));
+        return;
+      }
+      setGalleryJobs((data || []).map((row) => toJobListItem(row as Job)));
+      loadedAreasRef.current.galleryJobs = true;
+      clearFetchError('galleryJobs');
+    } catch (error) {
+      if (requestId !== galleryJobsFetchRef.current) return;
+      logFetchError('galeria de vagas', error);
+      setFetchErrors(prev => ({ ...prev, galleryJobs: 'Não foi possível carregar a galeria de vagas.' }));
+    } finally {
+      if (requestId === galleryJobsFetchRef.current) setIsLoadingGalleryJobs(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchGalleryNegocios = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.galleryNegocios) return;
+    const requestId = ++galleryNegociosFetchRef.current;
+    setIsLoadingGalleryNegocios(true);
+    try {
+      const { data, error } = await supabase
+        .from('negocios')
+        .select(NEGOCIO_GALLERY_FIELDS)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+      if (requestId !== galleryNegociosFetchRef.current) return;
+      if (error) {
+        logFetchError('galeria de negócios', error);
+        setFetchErrors(prev => ({ ...prev, galleryNegocios: 'Não foi possível carregar a galeria de negócios.' }));
+        return;
+      }
+      setGalleryNegocios((data || []).map((row) => toNegocioListItem(row as Negocio)));
+      loadedAreasRef.current.galleryNegocios = true;
+      clearFetchError('galleryNegocios');
+    } catch (error) {
+      if (requestId !== galleryNegociosFetchRef.current) return;
+      logFetchError('galeria de negócios', error);
+      setFetchErrors(prev => ({ ...prev, galleryNegocios: 'Não foi possível carregar a galeria de negócios.' }));
+    } finally {
+      if (requestId === galleryNegociosFetchRef.current) setIsLoadingGalleryNegocios(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchRejectedJobs = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.rejectedJobs) return;
+    const requestId = ++rejectedJobsFetchRef.current;
+    setIsLoadingRejectedJobs(true);
+    try {
+      const { data, error } = await supabase
+        .from('vagas')
+        .select(JOB_LIST_FIELDS)
+        .eq('status', 'rejected')
+        .order('created_at', { ascending: false });
+      if (requestId !== rejectedJobsFetchRef.current) return;
+      if (error) {
+        logFetchError('vagas recusadas', error);
+        setFetchErrors(prev => ({ ...prev, rejectedJobs: 'Não foi possível carregar as vagas recusadas.' }));
+        return;
+      }
+      setRejectedJobs((data || []).map((row) => toJobListItem(row as Job)));
+      loadedAreasRef.current.rejectedJobs = true;
+      clearFetchError('rejectedJobs');
+    } catch (error) {
+      if (requestId !== rejectedJobsFetchRef.current) return;
+      logFetchError('vagas recusadas', error);
+      setFetchErrors(prev => ({ ...prev, rejectedJobs: 'Não foi possível carregar as vagas recusadas.' }));
+    } finally {
+      if (requestId === rejectedJobsFetchRef.current) setIsLoadingRejectedJobs(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchRejectedNegocios = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.rejectedNegocios) return;
+    const requestId = ++rejectedNegociosFetchRef.current;
+    setIsLoadingRejectedNegocios(true);
+    try {
+      const { data, error } = await supabase
+        .from('negocios')
+        .select(NEGOCIO_LIST_FIELDS)
+        .eq('status', 'rejected')
+        .order('created_at', { ascending: false });
+      if (requestId !== rejectedNegociosFetchRef.current) return;
+      if (error) {
+        logFetchError('negócios recusados', error);
+        setFetchErrors(prev => ({ ...prev, rejectedNegocios: 'Não foi possível carregar os negócios recusados.' }));
+        return;
+      }
+      setRejectedNegocios((data || []).map((row) => toNegocioListItem(row as Negocio)));
+      loadedAreasRef.current.rejectedNegocios = true;
+      clearFetchError('rejectedNegocios');
+    } catch (error) {
+      if (requestId !== rejectedNegociosFetchRef.current) return;
+      logFetchError('negócios recusados', error);
+      setFetchErrors(prev => ({ ...prev, rejectedNegocios: 'Não foi possível carregar os negócios recusados.' }));
+    } finally {
+      if (requestId === rejectedNegociosFetchRef.current) setIsLoadingRejectedNegocios(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchNoticias = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.noticias) return;
+    const requestId = ++noticiasFetchRef.current;
+    setIsLoadingNoticias(true);
+    try {
+      const { data, error } = await supabase
+        .from('noticias')
+        .select(NEWS_LIST_FIELDS)
+        .order('created_at', { ascending: false });
+      if (requestId !== noticiasFetchRef.current) return;
+      if (error) {
+        logFetchError('noticias', error);
+        setFetchErrors(prev => ({ ...prev, noticias: 'Não foi possível carregar as notícias.' }));
+        return;
+      }
+      setNoticias((data || []).map((row) => toNewsListItem(row as Noticia)));
+      loadedAreasRef.current.noticias = true;
+      clearFetchError('noticias');
+    } catch (error) {
+      if (requestId !== noticiasFetchRef.current) return;
+      logFetchError('noticias', error);
+      setFetchErrors(prev => ({ ...prev, noticias: 'Não foi possível carregar as notícias.' }));
+    } finally {
+      if (requestId === noticiasFetchRef.current) setIsLoadingNoticias(false);
+    }
+  }, [clearFetchError]);
+
+  const fetchHistory = React.useCallback(async (force = false, append = false) => {
+    if (!force && !append && loadedAreasRef.current.history) return;
+    const requestId = ++historyFetchRef.current;
+    if (append) setIsLoadingMoreHistory(true);
+    else setIsLoadingHistory(true);
+    try {
+      const from = append ? historyFetchedCountRef.current : 0;
+      const to = from + HISTORY_PAGE_SIZE - 1;
+      const { data, error, count } = await supabase
+        .from('history')
+        .select(HISTORY_LIST_FIELDS, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (requestId !== historyFetchRef.current) return;
+      if (error) {
+        logFetchError('history', error);
+        setFetchErrors(prev => ({ ...prev, history: 'Não foi possível carregar o histórico.' }));
+        return;
+      }
+      const rows = (data || []) as HistoryItem[];
+      if (append) {
+        setHistory(prev => {
+          const ids = new Set(prev.map(item => String(item.id)));
+          return [...prev, ...rows.filter(item => !ids.has(String(item.id)))];
+        });
+        historyFetchedCountRef.current = from + rows.length;
+      } else {
+        setHistory(rows);
+        historyFetchedCountRef.current = rows.length;
+        loadedAreasRef.current.history = true;
+      }
+      setHistoryHasMore((count || 0) > historyFetchedCountRef.current);
+      clearFetchError('history');
+    } catch (error) {
+      if (requestId !== historyFetchRef.current) return;
+      logFetchError('history', error);
+      setFetchErrors(prev => ({ ...prev, history: 'Não foi possível carregar o histórico.' }));
+    } finally {
+      if (requestId === historyFetchRef.current) {
+        setIsLoadingHistory(false);
+        setIsLoadingMoreHistory(false);
+      }
+    }
+  }, [clearFetchError]);
+
+  const fetchSettings = React.useCallback(async (force = false) => {
+    if (!force && loadedAreasRef.current.settings) return;
+    const requestId = ++settingsFetchRef.current;
+    setIsLoadingSettings(true);
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select(SETTINGS_FIELDS)
+        .maybeSingle();
+      if (requestId !== settingsFetchRef.current) return;
+      if (error) {
+        logFetchError('settings', error);
+        setFetchErrors(prev => ({ ...prev, settings: 'Não foi possível carregar as configurações.' }));
+        return;
+      }
+      if (data) setSettings(data);
+      loadedAreasRef.current.settings = true;
+      setSettingsLoaded(true);
+      clearFetchError('settings');
+    } catch (error) {
+      if (requestId !== settingsFetchRef.current) return;
+      logFetchError('settings', error);
+      setFetchErrors(prev => ({ ...prev, settings: 'Não foi possível carregar as configurações.' }));
+    } finally {
+      if (requestId === settingsFetchRef.current) setIsLoadingSettings(false);
+    }
+  }, [clearFetchError]);
+
+  const loadPendingAreas = React.useCallback(() => {
+    void fetchPendingJobs();
+    void fetchPendingCandidates();
+    void fetchPendingNegocios();
+    void fetchPendingTestimonials();
+  }, [fetchPendingJobs, fetchPendingCandidates, fetchPendingNegocios, fetchPendingTestimonials]);
+
+  const openJobDetail = React.useCallback(async (id: string | number) => {
+    const requestId = ++jobDetailFetchRef.current;
+    setLoadingJobId(id);
+    try {
+      const { data, error } = await supabase.from('vagas').select('*').eq('id', id).single();
+      if (requestId !== jobDetailFetchRef.current) return;
+      if (error || !data) {
+        triggerToast('Não foi possível carregar a vaga.', 'error');
+        return;
+      }
+      setSelectedJob({
+        ...(data as Job),
+        requirements: Array.isArray((data as Job).requirements) ? (data as Job).requirements : [],
+      });
+    } catch (error) {
+      if (requestId !== jobDetailFetchRef.current) return;
+      console.error('Erro ao carregar vaga:', error);
+      triggerToast('Não foi possível carregar a vaga.', 'error');
+    } finally {
+      if (requestId === jobDetailFetchRef.current) setLoadingJobId(null);
+    }
+  }, []);
+
+  const openJobEditor = React.useCallback(async (id: string | number) => {
+    const requestId = ++jobDetailFetchRef.current;
+    setLoadingJobId(id);
+    try {
+      const { data, error } = await supabase.from('vagas').select('*').eq('id', id).single();
+      if (requestId !== jobDetailFetchRef.current) return;
+      if (error || !data) {
+        triggerToast('Não foi possível carregar a vaga para edição.', 'error');
+        return;
+      }
+      setEditingJob({
+        ...(data as Job),
+        requirements: Array.isArray((data as Job).requirements) ? (data as Job).requirements : [],
+      });
+    } catch (error) {
+      if (requestId !== jobDetailFetchRef.current) return;
+      console.error('Erro ao carregar vaga para edição:', error);
+      triggerToast('Não foi possível carregar a vaga para edição.', 'error');
+    } finally {
+      if (requestId === jobDetailFetchRef.current) setLoadingJobId(null);
+    }
+  }, []);
+
+  const openNegocioDetail = React.useCallback(async (id: string | number) => {
+    const requestId = ++negocioDetailFetchRef.current;
+    setLoadingNegocioId(id);
+    try {
+      const { data, error } = await supabase.from('negocios').select('*').eq('id', id).single();
+      if (requestId !== negocioDetailFetchRef.current) return;
+      if (error || !data) {
+        triggerToast('Não foi possível carregar o negócio.', 'error');
+        return;
+      }
+      setSelectedNegocio(data as Negocio);
+    } catch (error) {
+      if (requestId !== negocioDetailFetchRef.current) return;
+      console.error('Erro ao carregar negócio:', error);
+      triggerToast('Não foi possível carregar o negócio.', 'error');
+    } finally {
+      if (requestId === negocioDetailFetchRef.current) setLoadingNegocioId(null);
+    }
+  }, []);
+
+  const openNegocioEditor = React.useCallback(async (id: string | number) => {
+    const requestId = ++negocioDetailFetchRef.current;
+    setLoadingNegocioId(id);
+    try {
+      const { data, error } = await supabase.from('negocios').select('*').eq('id', id).single();
+      if (requestId !== negocioDetailFetchRef.current) return;
+      if (error || !data) {
+        triggerToast('Não foi possível carregar o negócio para edição.', 'error');
+        return;
+      }
+      setEditingNegocio(data as Negocio);
+    } catch (error) {
+      if (requestId !== negocioDetailFetchRef.current) return;
+      console.error('Erro ao carregar negócio para edição:', error);
+      triggerToast('Não foi possível carregar o negócio para edição.', 'error');
+    } finally {
+      if (requestId === negocioDetailFetchRef.current) setLoadingNegocioId(null);
+    }
+  }, []);
+
+  const openNoticiaEditor = React.useCallback(async (id: string | number) => {
+    const requestId = ++noticiaDetailFetchRef.current;
+    setLoadingNoticiaId(id);
+    try {
+      const { data, error } = await supabase.from('noticias').select('*').eq('id', id).single();
+      if (requestId !== noticiaDetailFetchRef.current) return;
+      if (error || !data) {
+        triggerToast('Não foi possível carregar a notícia para edição.', 'error');
+        return;
+      }
+      const record = data as Noticia;
+      setEditingNoticia(record);
+      setNewsContent(record.content || '');
+      setNewsImageUrl(record.image_url || '');
+    } catch (error) {
+      if (requestId !== noticiaDetailFetchRef.current) return;
+      console.error('Erro ao carregar notícia:', error);
+      triggerToast('Não foi possível carregar a notícia para edição.', 'error');
+    } finally {
+      if (requestId === noticiaDetailFetchRef.current) setLoadingNoticiaId(null);
     }
   }, []);
 
@@ -1155,11 +1666,11 @@ export default function Dashboard() {
         router.push('/admin/login');
       } else {
         setIsAuthChecking(false);
-        fetchData();
+        loadPendingAreas();
       }
     };
     checkAuth();
-  }, [router, fetchData]);
+  }, [router, loadPendingAreas]);
 
   useEffect(() => {
     if (activeView !== 'galeria') return;
@@ -1176,12 +1687,35 @@ export default function Dashboard() {
   }, [activeView, talentSearch, talentCategory, galleryPage, fetchGalleryTalents]);
 
   useEffect(() => {
-    if (activeView !== 'recusados') return;
-    void fetchRejectedTalents();
-  }, [activeView, fetchRejectedTalents]);
+    if (activeView === 'noticias') void fetchNoticias();
+    if (activeView === 'historico') void fetchHistory();
+    if (activeView === 'configuracoes') void fetchSettings();
+    if (activeView === 'galeria_vagas') void fetchGalleryJobs();
+    if (activeView === 'galeria_negocios') void fetchGalleryNegocios();
+    if (activeView === 'recusados') {
+      void fetchRejectedTalents();
+      void fetchRejectedJobs();
+      void fetchRejectedNegocios();
+    }
+  }, [
+    activeView,
+    fetchNoticias,
+    fetchHistory,
+    fetchSettings,
+    fetchGalleryJobs,
+    fetchGalleryNegocios,
+    fetchRejectedTalents,
+    fetchRejectedJobs,
+    fetchRejectedNegocios,
+  ]);
+
+  useEffect(() => {
+    if (activeView !== 'pendentes' || activePendingSubTab !== 'depoimentos') return;
+    void fetchApprovedTestimonials();
+  }, [activeView, activePendingSubTab, fetchApprovedTestimonials]);
 
   const approveJob = React.useCallback(async (id: string | number) => {
-    const job = jobs.find(j => String(j.id) === String(id));
+    const job = findJobById(id);
     if (!job) return;
 
     const { data, error } = await supabase
@@ -1191,7 +1725,12 @@ export default function Dashboard() {
       .select();
 
     if (!error && data && data.length > 0) {
-      setJobs(prev => prev.map(j => String(j.id) === String(id) ? { ...j, status: 'active' } : j));
+      const approved = toJobListItem({ ...job, ...(data[0] as Job), status: 'active' });
+      setJobs(prev => prev.filter(j => String(j.id) !== String(id)));
+      setRejectedJobs(prev => prev.filter(j => String(j.id) !== String(id)));
+      if (loadedAreasRef.current.galleryJobs) {
+        setGalleryJobs(prev => [approved, ...prev.filter(j => String(j.id) !== String(id))]);
+      }
       triggerToast('Vaga aprovada com sucesso!');
 
       const email = job.contact_email || job.email;
@@ -1227,7 +1766,7 @@ export default function Dashboard() {
       };
       
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
       
       setSelectedJob(null);
       setConfirmAction(null);
@@ -1235,10 +1774,10 @@ export default function Dashboard() {
       console.error('Erro ao aprovar vaga:', error || 'Nenhuma linha afetada.');
       triggerToast(error ? `Erro: ${error.message}` : 'Erro: Vaga não encontrada ou RLS bloqueou.', 'error');
     }
-  }, [jobs]);
+  }, [findJobById, prependHistory]);
 
   const rejectJob = React.useCallback(async (id: string | number) => {
-    const job = jobs.find(j => String(j.id) === String(id));
+    const job = findJobById(id);
     if (!job) return;
 
     const email = job.contact_email || job.email;
@@ -1248,6 +1787,8 @@ export default function Dashboard() {
     try {
       const result = await deleteAdminContent('vaga', id);
       setJobs(prev => prev.filter(j => String(j.id) !== String(id)));
+      setGalleryJobs(prev => prev.filter(j => String(j.id) !== String(id)));
+      setRejectedJobs(prev => prev.filter(j => String(j.id) !== String(id)));
       triggerToast(adminCleanupToast('Vaga recusada.', result.cleanup));
 
       if (notify && email) {
@@ -1282,7 +1823,7 @@ export default function Dashboard() {
       };
 
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
 
       setSelectedJob(null);
       setConfirmAction(null);
@@ -1290,15 +1831,17 @@ export default function Dashboard() {
       const message = error instanceof Error ? error.message : 'Erro ao recusar vaga.';
       triggerToast(`Erro: ${message}`, 'error');
     }
-  }, [jobs, isNotifyChecked, rejectionJustification]);
+  }, [findJobById, isNotifyChecked, rejectionJustification, prependHistory]);
 
   const deleteJob = React.useCallback(async (id: string | number) => {
-    const job = jobs.find(j => String(j.id) === String(id));
+    const job = findJobById(id);
     if (!job) return;
 
     try {
       const result = await deleteAdminContent('vaga', id);
       setJobs(prev => prev.filter(j => String(j.id) !== String(id)));
+      setGalleryJobs(prev => prev.filter(j => String(j.id) !== String(id)));
+      setRejectedJobs(prev => prev.filter(j => String(j.id) !== String(id)));
       triggerToast(adminCleanupToast('Vaga removida.', result.cleanup));
 
       const historyEntry = {
@@ -1307,12 +1850,12 @@ export default function Dashboard() {
       };
 
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Erro ao deletar.';
       triggerToast(`Erro ao deletar: ${message}`, 'error');
     }
-  }, [jobs]);
+  }, [findJobById, prependHistory]);
 
   const approveCandidate = React.useCallback(async (id: string | number) => {
     const cand = findCandidateById(id);
@@ -1371,7 +1914,7 @@ export default function Dashboard() {
       };
       
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
       
       setSelectedCandidate(null);
       setConfirmAction(null);
@@ -1427,7 +1970,7 @@ export default function Dashboard() {
       };
 
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
 
       setSelectedCandidate(null);
       setConfirmAction(null);
@@ -1438,7 +1981,7 @@ export default function Dashboard() {
   }, [findCandidateById, isNotifyChecked, rejectionJustification]);
 
   const approveTestimonial = React.useCallback(async (id: string | number) => {
-    const testimonial = testimonials.find(t => String(t.id) === String(id));
+    const testimonial = findTestimonialById(id);
     if (!testimonial) return;
 
     const { data, error } = await supabase
@@ -1449,7 +1992,10 @@ export default function Dashboard() {
       .single();
 
     if (!error && data) {
-      setTestimonials(prev => prev.map(t => String(t.id) === String(id) ? data : t));
+      setTestimonials(prev => prev.filter(t => String(t.id) !== String(id)));
+      if (loadedAreasRef.current.approvedTestimonials) {
+        setApprovedTestimonials(prev => [data, ...prev.filter(t => String(t.id) !== String(id))]);
+      }
       triggerToast('Depoimento aprovado!');
 
       const email = testimonial.email;
@@ -1484,14 +2030,14 @@ export default function Dashboard() {
         details: `Depoimento de "${testimonial.name}" foi aprovado.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
     } else {
       triggerToast(error ? error.message : 'Erro ao aprovar depoimento', 'error');
     }
-  }, [testimonials]);
+  }, [findTestimonialById, prependHistory]);
 
   const rejectTestimonial = React.useCallback(async (id: string | number) => {
-    const testimonial = testimonials.find(t => String(t.id) === String(id));
+    const testimonial = findTestimonialById(id);
     if (!testimonial) return;
 
     const email = testimonial.email;
@@ -1501,6 +2047,7 @@ export default function Dashboard() {
     try {
       const result = await deleteAdminContent('depoimento', id);
       setTestimonials(prev => prev.filter(t => String(t.id) !== String(id)));
+      setApprovedTestimonials(prev => prev.filter(t => String(t.id) !== String(id)));
       triggerToast(adminCleanupToast('Depoimento recusado.', result.cleanup));
 
       if (notify && email) {
@@ -1534,7 +2081,7 @@ export default function Dashboard() {
         details: `Depoimento de "${testimonial.name}" foi recusado. Justificativa: ${justification}`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
 
       setSelectedTestimonial(null);
       setConfirmAction(null);
@@ -1542,15 +2089,16 @@ export default function Dashboard() {
       const message = error instanceof Error ? error.message : 'Erro ao recusar depoimento';
       triggerToast(`Erro: ${message}`, 'error');
     }
-  }, [testimonials, isNotifyChecked, rejectionJustification]);
+  }, [findTestimonialById, isNotifyChecked, rejectionJustification, prependHistory]);
 
   const deleteTestimonial = React.useCallback(async (id: string | number) => {
-    const testimonial = testimonials.find(t => String(t.id) === String(id));
+    const testimonial = findTestimonialById(id);
     if (!testimonial) return;
 
     try {
       const result = await deleteAdminContent('depoimento', id);
       setTestimonials(prev => prev.filter(t => String(t.id) !== String(id)));
+      setApprovedTestimonials(prev => prev.filter(t => String(t.id) !== String(id)));
       triggerToast(adminCleanupToast('Depoimento removido.', result.cleanup));
 
       const historyEntry = {
@@ -1558,12 +2106,12 @@ export default function Dashboard() {
         details: `Depoimento de "${testimonial.name}" foi removido manualmente.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Erro ao deletar.';
       triggerToast(`Erro ao deletar: ${message}`, 'error');
     }
-  }, [testimonials]);
+  }, [findTestimonialById, prependHistory]);
 
   const addJob = React.useCallback(async (newJob: Partial<Job> & { logo_url?: string }) => {
     const jobData = {
@@ -1590,7 +2138,9 @@ export default function Dashboard() {
       .single();
 
     if (data && !error) {
-      setJobs(prev => [data, ...prev]);
+      if (loadedAreasRef.current.galleryJobs) {
+        setGalleryJobs(prev => [toJobListItem(data as Job), ...prev]);
+      }
       setIsAddingJob(false);
       triggerToast('Vaga cadastrada com sucesso!', 'success');
       
@@ -1599,7 +2149,7 @@ export default function Dashboard() {
         details: `Vaga "${data.title}" foi criada manualmente.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
     } else if (error) {
       triggerToast(`Erro ao salvar vaga: ${error.message}`, 'error');
       throw error;
@@ -1775,10 +2325,8 @@ export default function Dashboard() {
         action: 'Currículo Criado',
         details: `Currículo de "${data.name}" foi criado manualmente pelo Administrador.`
       };
-      await supabase.from('history').insert(historyEntry);
-      
-      const { data: hData } = await supabase.from('history').select('*').order('created_at', { ascending: false }).limit(20);
-      if (hData) setHistory(hData);
+      const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
+      prependHistory(hData);
     } else if (error) {
       await removeUploaded(uploaded);
       triggerToast(`Erro ao cadastrar currículo: ${error.message}`, 'error');
@@ -1930,7 +2478,9 @@ export default function Dashboard() {
         .single();
 
     if (data && !error) {
-      setNegocios(prev => [data, ...prev]);
+      if (loadedAreasRef.current.galleryNegocios) {
+        setGalleryNegocios(prev => [toNegocioListItem(data as Negocio), ...prev]);
+      }
       setIsAddingNegocio(false);
       triggerToast('Negócio cadastrado com sucesso!', 'success');
       
@@ -1943,10 +2493,8 @@ export default function Dashboard() {
         action: 'Negócio Criado',
         details: `Negócio "${data.title}" foi criado manualmente pelo Administrador.`
       };
-      await supabase.from('history').insert(historyEntry);
-      
-      const { data: hData } = await supabase.from('history').select('*').order('created_at', { ascending: false }).limit(20);
-      if (hData) setHistory(hData);
+      const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
+      prependHistory(hData);
     } else if (error) {
       await removeUploaded(uploaded);
       triggerToast(`Erro ao cadastrar negócio: ${error.message}`, 'error');
@@ -1978,7 +2526,12 @@ export default function Dashboard() {
       .single();
 
     if (data && !error) {
-      setJobs(prev => prev.map(j => String(j.id) === String(data.id) ? data : j));
+      const light = toJobListItem(data as Job);
+      const patch = (prev: Job[]) => prev.map(j => String(j.id) === String(light.id) ? { ...j, ...light } : j);
+      setJobs(patch);
+      setGalleryJobs(patch);
+      setRejectedJobs(patch);
+      setSelectedJob(prev => (prev && String(prev.id) === String(data.id) ? { ...prev, ...data } : prev));
       setEditingJob(null);
       setConfirmAction(null);
       
@@ -1987,7 +2540,7 @@ export default function Dashboard() {
         details: `Vaga "${data.title}" foi editada manualmente.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
     }
   }, []);
 
@@ -2010,7 +2563,7 @@ export default function Dashboard() {
         details: `Currículo de "${cand.name}" foi removido manualmente.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Erro ao deletar.';
       triggerToast(`Erro ao deletar: ${message}`, 'error');
@@ -2054,13 +2607,13 @@ export default function Dashboard() {
         details: `Currículo de "${data.name}" foi editado manualmente.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
     }
   }, []);
 
   // Negocios CRUD
   const approveNegocio = React.useCallback(async (id: string | number) => {
-    const negocio = negocios.find(n => String(n.id) === String(id));
+    const negocio = findNegocioById(id);
     if (!negocio) return;
     const updatePayload: {
       status: string;
@@ -2074,7 +2627,12 @@ export default function Dashboard() {
     }
     const { data, error } = await supabase.from('negocios').update(updatePayload).eq('id', id).select();
     if (!error && data && data.length > 0) {
-      setNegocios(prev => prev.map(n => String(n.id) === String(id) ? { ...n, ...data[0], status: 'active' } : n));
+      const approved = toNegocioListItem({ ...negocio, ...(data[0] as Negocio), status: 'active' });
+      setNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
+      setRejectedNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
+      if (loadedAreasRef.current.galleryNegocios) {
+        setGalleryNegocios(prev => [approved, ...prev.filter(n => String(n.id) !== String(id))]);
+      }
       triggerToast('Negócio aprovado!');
 
       const email = negocio.contact_email;
@@ -2108,16 +2666,16 @@ export default function Dashboard() {
         action: 'Negócio Aprovado',
         details: `Negócio "${negocio.title}" foi aprovado.`
       }).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
       setSelectedNegocio(null);
       setConfirmAction(null);
     } else {
       triggerToast(error ? `Erro: ${error.message}` : 'Erro: Negócio não encontrado ou RLS bloqueou.', 'error');
     }
-  }, [negocios]);
+  }, [findNegocioById, prependHistory]);
 
   const rejectNegocio = React.useCallback(async (id: string | number) => {
-    const negocio = negocios.find(n => String(n.id) === String(id));
+    const negocio = findNegocioById(id);
     if (!negocio) return;
 
     const email = negocio.contact_email;
@@ -2127,6 +2685,8 @@ export default function Dashboard() {
     try {
       const result = await deleteAdminContent('negocio', id);
       setNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
+      setGalleryNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
+      setRejectedNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
       triggerToast(adminCleanupToast('Negócio recusado.', result.cleanup));
 
       if (notify && email) {
@@ -2159,7 +2719,7 @@ export default function Dashboard() {
         action: 'Negócio Recusado',
         details: `Negócio "${negocio.title}" foi recusado. Justificativa: ${justification}`
       }).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
 
       setSelectedNegocio(null);
       setConfirmAction(null);
@@ -2167,26 +2727,28 @@ export default function Dashboard() {
       const message = error instanceof Error ? error.message : 'Erro ao recusar negócio.';
       triggerToast(`Erro: ${message}`, 'error');
     }
-  }, [negocios, isNotifyChecked, rejectionJustification]);
+  }, [findNegocioById, isNotifyChecked, rejectionJustification, prependHistory]);
 
   const deleteNegocio = React.useCallback(async (id: string | number) => {
-    const negocio = negocios.find(n => String(n.id) === String(id));
+    const negocio = findNegocioById(id);
     if (!negocio) return;
     try {
       const result = await deleteAdminContent('negocio', id);
       setNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
+      setGalleryNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
+      setRejectedNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
       triggerToast(adminCleanupToast('Negócio removido.', result.cleanup));
       const { data: hData } = await supabase.from('history').insert({
         action: 'Negócio Removido',
         details: `Negócio "${negocio.title}" foi removido manualmente.`
       }).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
       setConfirmAction(null);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Erro ao deletar.';
       triggerToast(`Erro: ${message}`, 'error');
     }
-  }, [negocios]);
+  }, [findNegocioById, prependHistory]);
 
   const updateNegocio = React.useCallback(async (updatedNegocio: Negocio) => {
     const { data, error } = await supabase
@@ -2209,7 +2771,12 @@ export default function Dashboard() {
       .single();
 
     if (data && !error) {
-      setNegocios(prev => prev.map(n => String(n.id) === String(data.id) ? data : n));
+      const light = toNegocioListItem(data as Negocio);
+      const patch = (prev: Negocio[]) => prev.map(n => String(n.id) === String(light.id) ? { ...n, ...light } : n);
+      setNegocios(patch);
+      setGalleryNegocios(patch);
+      setRejectedNegocios(patch);
+      setSelectedNegocio(prev => (prev && String(prev.id) === String(data.id) ? { ...prev, ...data } : prev));
       setEditingNegocio(null);
       setConfirmAction(null);
       
@@ -2218,7 +2785,7 @@ export default function Dashboard() {
         details: `Negócio "${data.title}" foi editado manualmente.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
       triggerToast('Negócio atualizado com sucesso!');
     } else {
       triggerToast(error ? `Erro: ${error.message}` : 'Erro ao atualizar negócio.', 'error');
@@ -2235,7 +2802,7 @@ export default function Dashboard() {
         action: 'Notícia Aprovada',
         details: `Notícia "${noticia.title}" foi publicada.`
       }).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
       setSelectedNoticia(null);
       setConfirmAction(null);
       triggerToast('Notícia aprovada!');
@@ -2276,14 +2843,14 @@ export default function Dashboard() {
       const { data, error } = await supabase.from('noticias').insert(noticiaData).select().single();
       if (error) throw error;
       if (data) {
-        setNoticias(prev => [data, ...prev]);
+        setNoticias(prev => [toNewsListItem(data as Noticia), ...prev]);
         setIsAddingNoticia(false);
         setNewsImageFile(null);
         const { data: hData } = await supabase.from('history').insert({
           action: 'Notícia Criada',
           details: `Notícia "${data.title}" foi postada.`
         }).select().single();
-        if (hData) setHistory(prev => [hData, ...prev]);
+        prependHistory(hData);
       }
     } catch (error: unknown) {
       await removeUploaded(uploaded);
@@ -2312,14 +2879,14 @@ export default function Dashboard() {
           author: updatedNoticia.author,
           category: updatedNoticia.category,
         });
-        setNoticias(prev => prev.map(n => n.id === result.record.id ? result.record : n));
+        setNoticias(prev => prev.map(n => n.id === result.record.id ? toNewsListItem(result.record) : n));
         setEditingNoticia(null);
         setNewsImageFile(null);
         const { data: hData } = await supabase.from('history').insert({
           action: 'Notícia Editada',
           details: `Notícia "${result.record.title}" foi atualizada.`
         }).select().single();
-        if (hData) setHistory(prev => [hData, ...prev]);
+        prependHistory(hData);
         if (result.cleanup === 'partial') {
           triggerToast(adminCleanupToast('Notícia atualizada.', result.cleanup));
         }
@@ -2342,14 +2909,14 @@ export default function Dashboard() {
 
       if (error) throw error;
       if (data) {
-        setNoticias(prev => prev.map(n => n.id === data.id ? data : n));
+        setNoticias(prev => prev.map(n => n.id === data.id ? toNewsListItem(data as Noticia) : n));
         setEditingNoticia(null);
         setNewsImageFile(null);
         const { data: hData } = await supabase.from('history').insert({
           action: 'Notícia Editada',
           details: `Notícia "${data.title}" foi atualizada.`
         }).select().single();
-        if (hData) setHistory(prev => [hData, ...prev]);
+        prependHistory(hData);
       }
     } catch (error: unknown) {
       await removeUploaded(uploaded);
@@ -2368,7 +2935,7 @@ export default function Dashboard() {
         action: 'Notícia Removida',
         details: `Notícia "${noticia.title}" foi excluída.`
       }).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
       setConfirmAction(null);
       if (result.cleanup === 'partial') {
         triggerToast(adminCleanupToast('Notícia removida.', result.cleanup));
@@ -2405,7 +2972,7 @@ export default function Dashboard() {
         details: 'As configurações globais do sistema foram atualizadas.'
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      prependHistory(hData);
     } else {
       console.error('Error saving settings:', error);
       triggerToast('Erro ao salvar configurações.', 'error');
@@ -2423,10 +2990,10 @@ export default function Dashboard() {
     );
   }
 
-  const jobsPendingCount = jobs.filter(j => j.status === 'pending').length;
-  const candidatesPendingCount = candidates.filter(c => c.status === 'pending').length;
-  const negociosPendingCount = negocios.filter(n => n.status === 'pending').length;
-  const testimonialsPendingCount = testimonials.filter(t => t.status === 'pending').length;
+  const jobsPendingCount = jobs.length;
+  const candidatesPendingCount = candidates.length;
+  const negociosPendingCount = negocios.length;
+  const testimonialsPendingCount = testimonials.length;
   const totalPendingCount = jobsPendingCount + candidatesPendingCount + negociosPendingCount + testimonialsPendingCount;
 
   return (
@@ -2439,14 +3006,6 @@ export default function Dashboard() {
         <div className="flex-1 flex overflow-hidden">
           {/* Content Area */}
           <div className="flex-1 p-4 lg:p-8 overflow-y-auto relative">
-            {isLoading && (
-              <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-40 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                  <p className="text-sm font-bold text-primary animate-pulse uppercase tracking-widest">Sincronizando Dados...</p>
-                </div>
-              </div>
-            )}
             {activeView === 'pendentes' && activePendingSubTab === 'vagas' && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
@@ -2454,9 +3013,12 @@ export default function Dashboard() {
                 className="space-y-8"
               >
                 {renderPendingTabs()}
-                {renderDataFetchError(fetchErrors.jobs)}
+                {renderDataFetchError(fetchErrors.jobs, () => fetchPendingJobs(true), isLoadingJobs)}
 
                 <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-outline-variant/10 overflow-x-auto">
+                  {isLoadingJobs && jobs.length === 0 ? (
+                    <AreaLoadingSkeleton label="Carregando vagas pendentes..." />
+                  ) : (
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead className="bg-surface-container-low border-b border-outline-variant/10">
                       <tr>
@@ -2468,10 +3030,10 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/10">
-                      {jobs.filter(j => j.status === 'pending').map((job) => (
+                      {jobs.map((job) => (
                         <tr 
                           key={job.id}
-                          onClick={() => setSelectedJob(job)}
+                          onClick={() => void openJobDetail(job.id)}
                           className={cn(
                             "hover:bg-primary/5 transition-all cursor-pointer group",
                             selectedJob?.id === job.id ? "bg-primary/5 border-l-4 border-primary" : "border-l-4 border-transparent"
@@ -2485,6 +3047,8 @@ export default function Dashboard() {
                               )}>
                                 {job.logo_url ? (
                                   <Image src={job.logo_url} alt="Logo" fill className="object-contain p-2" referrerPolicy="no-referrer" />
+                                ) : loadingJobId === job.id ? (
+                                  <Loader2 className="w-5 h-5 animate-spin" />
                                 ) : (job.attachment_url && job.attachment_url.startsWith('data:image')) ? (
                                   <Image src={job.attachment_url} alt="Logo" fill className="object-cover" referrerPolicy="no-referrer" />
                                 ) : (
@@ -2516,7 +3080,7 @@ export default function Dashboard() {
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedJob(job);
+                                void openJobDetail(job.id);
                               }}
                               className={cn(
                                 "px-4 py-2 text-xs font-bold rounded-xl transition-all active:scale-95",
@@ -2530,7 +3094,7 @@ export default function Dashboard() {
                           </td>
                         </tr>
                       ))}
-                      {jobs.filter(j => j.status === 'pending').length === 0 && !isLoading && !fetchErrors.jobs && (
+                      {jobs.length === 0 && !isLoadingJobs && !fetchErrors.jobs && (
                         <tr>
                           <td colSpan={5} className="px-6 py-10 text-center text-on-surface-variant">
                             Nenhuma vaga pendente no momento.
@@ -2539,6 +3103,7 @@ export default function Dashboard() {
                       )}
                     </tbody>
                   </table>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -2567,7 +3132,12 @@ export default function Dashboard() {
                   </button>
                 </header>
 
+                {renderDataFetchError(fetchErrors.noticias, () => fetchNoticias(true), isLoadingNoticias)}
+
                 <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-outline-variant/10 overflow-x-auto">
+                  {isLoadingNoticias && noticias.length === 0 ? (
+                    <AreaLoadingSkeleton label="Carregando notícias..." />
+                  ) : (
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead className="bg-surface-container-low border-b border-outline-variant/10">
                       <tr>
@@ -2612,14 +3182,11 @@ export default function Dashboard() {
                           <td className="px-6 py-5 text-right">
                             <div className="flex justify-end gap-2">
                               <button 
-                                onClick={() => {
-                                  setEditingNoticia(n);
-                                  setNewsContent(n.content);
-                                  setNewsImageUrl(n.image_url || '');
-                                }}
-                                className="p-2 text-on-surface-variant hover:text-primary transition-colors"
+                                onClick={() => void openNoticiaEditor(n.id)}
+                                disabled={loadingNoticiaId === n.id}
+                                className="p-2 text-on-surface-variant hover:text-primary transition-colors disabled:opacity-50"
                               >
-                                <Edit className="w-5 h-5" />
+                                {loadingNoticiaId === n.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Edit className="w-5 h-5" />}
                               </button>
                               <button 
                                 onClick={() => setConfirmAction({ type: 'delete', target: 'noticia' as any, id: n.id })}
@@ -2631,7 +3198,7 @@ export default function Dashboard() {
                           </td>
                         </tr>
                       ))}
-                      {noticias.length === 0 && (
+                      {noticias.length === 0 && !isLoadingNoticias && !fetchErrors.noticias && (
                         <tr>
                           <td colSpan={5} className="px-6 py-10 text-center text-on-surface-variant">
                             Nenhuma notícia cadastrada.
@@ -2640,6 +3207,7 @@ export default function Dashboard() {
                       )}
                     </tbody>
                   </table>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -2651,9 +3219,12 @@ export default function Dashboard() {
                 className="space-y-8"
               >
                 {renderPendingTabs()}
-                {renderDataFetchError(fetchErrors.candidates)}
+                {renderDataFetchError(fetchErrors.candidates, () => fetchPendingCandidates(true), isLoadingCandidates)}
 
                 <div className="bg-white rounded-2xl p-2 shadow-sm border border-outline-variant/10 overflow-x-auto">
+                  {isLoadingCandidates && candidates.length === 0 ? (
+                    <AreaLoadingSkeleton label="Carregando currículos pendentes..." />
+                  ) : (
                   <table className="w-full text-left border-separate border-spacing-y-2 px-2 min-w-[600px]">
                     <thead className="text-on-surface-variant text-xs uppercase tracking-widest font-bold">
                       <tr>
@@ -2664,7 +3235,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="text-sm">
-                      {candidates.filter(c => c.status === 'pending').map((c) => (
+                      {candidates.map((c) => (
                         <tr 
                           key={c.id}
                           onClick={() => openCandidateDetail(c.id)}
@@ -2702,7 +3273,7 @@ export default function Dashboard() {
                           </td>
                         </tr>
                       ))}
-                      {candidates.filter(c => c.status === 'pending').length === 0 && !isLoading && !fetchErrors.candidates && (
+                      {candidates.length === 0 && !isLoadingCandidates && !fetchErrors.candidates && (
                         <tr>
                           <td colSpan={4} className="px-4 py-10 text-center text-on-surface-variant">
                             Nenhum currículo pendente no momento.
@@ -2711,6 +3282,7 @@ export default function Dashboard() {
                       )}
                     </tbody>
                   </table>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -2722,9 +3294,12 @@ export default function Dashboard() {
                 className="space-y-8"
               >
                 {renderPendingTabs()}
-                {renderDataFetchError(fetchErrors.negocios)}
+                {renderDataFetchError(fetchErrors.negocios, () => fetchPendingNegocios(true), isLoadingNegocios)}
 
                 <div className="bg-white rounded-2xl p-2 shadow-sm border border-outline-variant/10 overflow-x-auto">
+                  {isLoadingNegocios && negocios.length === 0 ? (
+                    <AreaLoadingSkeleton label="Carregando negócios pendentes..." />
+                  ) : (
                   <table className="w-full text-left border-separate border-spacing-y-2 px-2 min-w-[600px]">
                     <thead className="text-on-surface-variant text-xs uppercase tracking-widest font-bold">
                       <tr>
@@ -2735,10 +3310,10 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="text-sm">
-                      {negocios.filter(n => n.status === 'pending').map((n) => (
+                      {negocios.map((n) => (
                         <tr 
                           key={n.id}
-                          onClick={() => setSelectedNegocio(n)}
+                          onClick={() => void openNegocioDetail(n.id)}
                           className={cn(
                             "group hover:bg-orange-50 transition-all cursor-pointer rounded-xl",
                             selectedNegocio?.id === n.id ? "bg-orange-50" : "bg-surface-container-low/30"
@@ -2776,7 +3351,7 @@ export default function Dashboard() {
                           </td>
                         </tr>
                       ))}
-                      {negocios.filter(n => n.status === 'pending').length === 0 && !isLoading && !fetchErrors.negocios && (
+                      {negocios.length === 0 && !isLoadingNegocios && !fetchErrors.negocios && (
                         <tr>
                           <td colSpan={4} className="px-4 py-10 text-center text-on-surface-variant">
                             Nenhum negócio pendente no momento.
@@ -2785,6 +3360,7 @@ export default function Dashboard() {
                       )}
                     </tbody>
                   </table>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -2796,10 +3372,14 @@ export default function Dashboard() {
                 className="space-y-8"
               >
                 {renderPendingTabs()}
-                {renderDataFetchError(fetchErrors.testimonials)}
+                {renderDataFetchError(fetchErrors.testimonials, () => fetchPendingTestimonials(true), isLoadingTestimonials)}
+                {renderDataFetchError(fetchErrors.approvedTestimonials, () => fetchApprovedTestimonials(true), isLoadingApprovedTestimonials)}
 
                 <div className="grid grid-cols-1 gap-6">
-                  {testimonials.filter(t => t.status === 'pending').map((t) => (
+                  {isLoadingTestimonials && testimonials.length === 0 && (
+                    <AreaLoadingSkeleton label="Carregando depoimentos pendentes..." />
+                  )}
+                  {testimonials.map((t) => (
                     <div key={t.id} className="bg-white p-6 rounded-3xl border border-outline-variant/10 shadow-sm flex flex-col md:flex-row gap-6">
                       <div className="shrink-0">
                         <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-container border-2 border-primary/20">
@@ -2854,7 +3434,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ))}
-                  {testimonials.filter(t => t.status === 'pending').length === 0 && !isLoading && !fetchErrors.testimonials && (
+                  {testimonials.length === 0 && !isLoadingTestimonials && !fetchErrors.testimonials && (
                     <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-outline-variant/30">
                        <Quote className="w-12 h-12 text-outline-variant mx-auto mb-4 opacity-50" />
                        <p className="text-on-surface-variant font-bold">Nenhum depoimento aguardando aprovação.</p>
@@ -2862,14 +3442,17 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                {testimonials.filter(t => t.status === 'approved').length > 0 && (
+                {isLoadingApprovedTestimonials && approvedTestimonials.length === 0 && (
+                  <AreaLoadingSkeleton label="Carregando depoimentos publicados..." />
+                )}
+                {approvedTestimonials.length > 0 && (
                    <div className="mt-12 space-y-6">
                       <h2 className="text-xl font-bold text-on-surface flex items-center gap-2 px-2">
                         <CheckCircle2 className="w-5 h-5 text-tertiary" />
                         Depoimentos Aprovados
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {testimonials.filter(t => t.status === 'approved').map((t) => (
+                        {approvedTestimonials.map((t) => (
                           <div key={t.id} className="bg-white p-5 rounded-2xl border border-outline-variant/10 shadow-sm flex gap-4">
                              <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-primary/10">
                                 {t.photo_url ? (
@@ -2943,9 +3526,12 @@ export default function Dashboard() {
                   ))}
                 </nav>
 
+                {renderDataFetchError(fetchErrors.galleryNegocios, () => fetchGalleryNegocios(true), isLoadingGalleryNegocios)}
+                {isLoadingGalleryNegocios && galleryNegocios.length === 0 && (
+                  <AreaLoadingSkeleton label="Carregando galeria de negócios..." />
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {negocios
-                    .filter(n => n.status === 'active')
+                  {galleryNegocios
                     .filter(n => negocioCategory === 'Todas' || n.area === negocioCategory)
                     .filter(n => n.title.toLowerCase().includes(negocioSearch.toLowerCase()) || n.owner_name.toLowerCase().includes(negocioSearch.toLowerCase()))
                     .map((n) => (
@@ -2973,7 +3559,7 @@ export default function Dashboard() {
                         <div className="flex justify-between items-center pt-4 border-t border-outline-variant/10 mt-auto">
                           <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full uppercase">{n.type}</span>
                           <button 
-                            onClick={() => setSelectedNegocio(n)}
+                            onClick={() => void openNegocioDetail(n.id)}
                             className="text-xs font-bold text-[#00628c] hover:underline"
                           >
                             Ver Detalhes
@@ -2981,7 +3567,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                     ))}
-                  {negocios.filter(n => n.status === 'active').length === 0 && (
+                  {galleryNegocios.length === 0 && !isLoadingGalleryNegocios && !fetchErrors.galleryNegocios && (
                     <div className="col-span-full py-12 text-center text-on-surface-variant">
                       Nenhum negócio ativo na galeria.
                     </div>
@@ -3070,8 +3656,13 @@ export default function Dashboard() {
                   </aside>
 
                   <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-                    {jobs
-                      .filter(j => j.status === 'active')
+                  {renderDataFetchError(fetchErrors.galleryJobs, () => fetchGalleryJobs(true), isLoadingGalleryJobs)}
+                  {isLoadingGalleryJobs && galleryJobs.length === 0 && (
+                    <div className="col-span-full">
+                      <AreaLoadingSkeleton label="Carregando galeria de vagas..." />
+                    </div>
+                  )}
+                    {galleryJobs
                       .filter(j => jobCategory === 'Todas as Vagas' || j.area === jobCategory)
                       .filter(j => j.title.toLowerCase().includes(jobSearch.toLowerCase()) || j.company.toLowerCase().includes(jobSearch.toLowerCase()))
                       .map((job) => (
@@ -3108,7 +3699,7 @@ export default function Dashboard() {
                         <div className="flex justify-between items-center pt-4 border-t border-outline-variant/10 mt-auto">
                           <span className="text-xs font-bold text-tertiary uppercase">ATIVA</span>
                           <button 
-                            onClick={() => setEditingJob(job)}
+                            onClick={() => void openJobEditor(job.id)}
                             className="text-xs font-bold text-primary hover:underline"
                           >
                             Editar
@@ -3116,7 +3707,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                     ))}
-                    {jobs.filter(j => j.status === 'active').length === 0 && (
+                    {galleryJobs.length === 0 && !isLoadingGalleryJobs && !fetchErrors.galleryJobs && (
                       <div className="col-span-full py-12 text-center text-on-surface-variant">
                         Nenhuma vaga ativa na galeria.
                       </div>
@@ -3136,7 +3727,9 @@ export default function Dashboard() {
                   <h1 className="text-3xl font-extrabold text-error tracking-tight font-headline">Itens Recusados</h1>
                   <p className="text-on-surface-variant mt-1">Visualize vagas e candidatos que não foram aprovados.</p>
                 </header>
-                {renderDataFetchError(fetchErrors.rejected, fetchRejectedTalents)}
+                {renderDataFetchError(fetchErrors.rejected, () => fetchRejectedTalents(true), isLoadingRejected)}
+                {renderDataFetchError(fetchErrors.rejectedJobs, () => fetchRejectedJobs(true), isLoadingRejectedJobs)}
+                {renderDataFetchError(fetchErrors.rejectedNegocios, () => fetchRejectedNegocios(true), isLoadingRejectedNegocios)}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <section className="space-y-4">
@@ -3145,7 +3738,7 @@ export default function Dashboard() {
                       Vagas Recusadas
                     </h2>
                     <div className="space-y-3">
-                      {jobs.filter(j => j.status === 'rejected').map(job => (
+                      {rejectedJobs.map(job => (
                         <div key={job.id} className="p-4 bg-white rounded-2xl border border-outline-variant/10 shadow-sm flex justify-between items-center">
                           <div>
                             <p className="font-bold text-on-surface">{job.title}</p>
@@ -3159,7 +3752,10 @@ export default function Dashboard() {
                           </button>
                         </div>
                       ))}
-                      {jobs.filter(j => j.status === 'rejected').length === 0 && (
+                      {isLoadingRejectedJobs && rejectedJobs.length === 0 && (
+                        <p className="text-sm text-on-surface-variant italic">Carregando vagas recusadas...</p>
+                      )}
+                      {!isLoadingRejectedJobs && rejectedJobs.length === 0 && !fetchErrors.rejectedJobs && (
                         <p className="text-sm text-on-surface-variant italic">Nenhuma vaga recusada.</p>
                       )}
                     </div>
@@ -3205,7 +3801,7 @@ export default function Dashboard() {
                       Negócios Recusados
                     </h2>
                     <div className="space-y-3">
-                      {negocios.filter(n => n.status === 'rejected').map(neg => (
+                      {rejectedNegocios.map(neg => (
                         <div key={neg.id} className="p-4 bg-white rounded-2xl border border-outline-variant/10 shadow-sm flex justify-between items-center">
                           <div>
                             <p className="font-bold text-on-surface">{neg.title}</p>
@@ -3219,7 +3815,10 @@ export default function Dashboard() {
                           </button>
                         </div>
                       ))}
-                      {negocios.filter(n => n.status === 'rejected').length === 0 && (
+                      {isLoadingRejectedNegocios && rejectedNegocios.length === 0 && (
+                        <p className="text-sm text-on-surface-variant italic">Carregando negócios recusados...</p>
+                      )}
+                      {!isLoadingRejectedNegocios && rejectedNegocios.length === 0 && !fetchErrors.rejectedNegocios && (
                         <p className="text-sm text-on-surface-variant italic">Nenhum negócio recusado.</p>
                       )}
                     </div>
@@ -3239,7 +3838,12 @@ export default function Dashboard() {
                   <p className="text-on-surface-variant mt-1">Acompanhe todas as atividades de moderação realizadas no painel.</p>
                 </header>
 
+                {renderDataFetchError(fetchErrors.history, () => fetchHistory(true), isLoadingHistory)}
+
                 <div className="bg-white rounded-2xl shadow-sm border border-outline-variant/10 overflow-hidden">
+                  {isLoadingHistory && history.length === 0 ? (
+                    <AreaLoadingSkeleton label="Carregando histórico..." />
+                  ) : (
                   <div className="divide-y divide-outline-variant/10">
                     {history.length > 0 ? history.map((item) => (
                       <div key={item.id} className="p-6 hover:bg-surface-container-low transition-colors flex gap-4">
@@ -3264,6 +3868,19 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
+                  )}
+                  {historyHasMore && (
+                    <div className="p-4 border-t border-outline-variant/10 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => void fetchHistory(false, true)}
+                        disabled={isLoadingMoreHistory}
+                        className="px-6 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold disabled:opacity-60"
+                      >
+                        {isLoadingMoreHistory ? 'Carregando...' : 'Carregar mais'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -3347,7 +3964,7 @@ export default function Dashboard() {
                   </aside>
 
                   <div className="flex-1 space-y-6">
-                    {renderDataFetchError(fetchErrors.gallery, () => fetchGalleryTalents(talentSearch, talentCategory, galleryPage))}
+                    {renderDataFetchError(fetchErrors.gallery, () => fetchGalleryTalents(talentSearch, talentCategory, galleryPage, true), isLoadingGallery)}
                     <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 items-start min-h-[200px]">
                     {isLoadingGallery && (
                       <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-3xl">
@@ -3488,7 +4105,12 @@ export default function Dashboard() {
                   <p className="text-on-surface-variant mt-1">Gerencie as preferências globais da plataforma HumanConnect.</p>
                 </header>
 
-                <form onSubmit={(e) => {
+                {renderDataFetchError(fetchErrors.settings, () => fetchSettings(true), isLoadingSettings)}
+                {(isLoadingSettings || !settingsLoaded) && !fetchErrors.settings && (
+                  <AreaLoadingSkeleton label="Carregando configurações..." />
+                )}
+                {settingsLoaded && (
+                <form key={String(settings.id ?? 'settings')} onSubmit={(e) => {
                   e.preventDefault();
                   handleSaveSettings(new FormData(e.currentTarget));
                 }} className="grid grid-cols-1 gap-6">
@@ -3541,6 +4163,7 @@ export default function Dashboard() {
                     </button>
                   </div>
                 </form>
+                )}
               </motion.div>
             )}
           </div>
@@ -4150,7 +4773,7 @@ export default function Dashboard() {
                     {expandedSections.requirements && (
                       <div className="p-5 pt-0 animate-in fade-in slide-in-from-top-2 duration-300">
                         <ul className="text-sm text-on-surface-variant space-y-3">
-                          {selectedJob.requirements.map((req, i) => (
+                          {Array.isArray(selectedJob.requirements) && selectedJob.requirements.map((req, i) => (
                             <li key={i} className="flex gap-3 items-start">
                               <span className="w-1.5 h-1.5 rounded-full bg-tertiary mt-1.5 shrink-0" />
                               {req}
@@ -5531,16 +6154,16 @@ export default function Dashboard() {
         const getTargetItemName = () => {
           const { target, id } = confirmAction;
           if (target === 'job') {
-            return jobs.find(j => String(j.id) === String(id))?.title || '';
+            return findJobById(id)?.title || '';
           }
           if (target === 'candidate') {
             return findCandidateById(id)?.name || '';
           }
           if (target === 'negocio') {
-            return negocios.find(n => String(n.id) === String(id))?.title || '';
+            return findNegocioById(id)?.title || '';
           }
           if (target === 'depoimento') {
-            return testimonials.find(t => String(t.id) === String(id))?.name || '';
+            return findTestimonialById(id)?.name || '';
           }
           return '';
         };
@@ -5548,17 +6171,17 @@ export default function Dashboard() {
         const getTargetItemEmail = () => {
           const { target, id } = confirmAction;
           if (target === 'job') {
-            const job = jobs.find(j => String(j.id) === String(id));
+            const job = findJobById(id);
             return job?.contact_email || job?.email || null;
           }
           if (target === 'candidate') {
             return findCandidateById(id)?.email || null;
           }
           if (target === 'negocio') {
-            return negocios.find(n => String(n.id) === String(id))?.contact_email || null;
+            return findNegocioById(id)?.contact_email || null;
           }
           if (target === 'depoimento') {
-            return testimonials.find(t => String(t.id) === String(id))?.email || null;
+            return findTestimonialById(id)?.email || null;
           }
           return null;
         };
