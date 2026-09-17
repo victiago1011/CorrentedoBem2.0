@@ -2,7 +2,7 @@
 
 Versão: 1.0
 
-Última atualização: 07/07/2026
+Última atualização: 17/09/2026
 
 Status: Oficial
 
@@ -53,6 +53,28 @@ No detalhe do currículo, o painel indica:
 - Consentimento não registrado (`NULL`)
 
 Cadastros criados pelo Admin não preenchem campos de aceite.
+
+---
+
+# Aprovação e recusa
+
+Talentos, Vagas, Negócios e Depoimentos passam por aprovação ou recusa no painel.
+
+**Aprovar** mantém o registro no banco e os arquivos associados.
+
+**Recusar** é exclusão definitiva. Não há recuperação nem reavaliação do cadastro recusado neste painel.
+
+Na recusa, o Admin usa o mesmo `DELETE /api/admin/content` da exclusão manual (Fase 2B):
+
+1. Os dados necessários à notificação e ao histórico ficam em memória.
+2. O servidor remove a linha no banco.
+3. Só após o DELETE confirmado, arquivos válidos do nosso Supabase Storage são removidos.
+4. Base64 legado e URLs externas não geram `storage.remove`.
+5. Se o cleanup do Storage falhar em parte, o registro **não** é restaurado.
+6. O e-mail de recusa, quando a notificação está ligada, é enviado depois da exclusão confirmada, com os dados já em memória.
+7. Falha no e-mail **não** recria o cadastro.
+
+Registros antigos com `status = rejected` podem continuar existindo até serem excluídos manualmente.
 
 ---
 

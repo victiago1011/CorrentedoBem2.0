@@ -163,6 +163,7 @@ Todas seguem a mesma estrutura:
 ### Padrão do painel admin
 
 - `app/admin/page.tsx` — arquivo único que concentra todas as views de moderação (vagas, talentos, negócios, notícias, depoimentos, configurações, histórico)
+- Talentos, Vagas, Negócios e Depoimentos têm aprovação/recusa. Aprovar mantém o registro e os arquivos. Recusar é exclusão definitiva pelo mesmo `DELETE /api/admin/content` da exclusão manual; não há reavaliação no painel.
 - `app/admin/emails/page.tsx` — gestão de inscritos, campanhas e analytics
 - Navegação interna por estado (`activeView`) — não usa sub-rotas
 - Editor rich text via `react-quill-new` (import dinâmico, sem SSR)
@@ -220,9 +221,9 @@ app/api/
 |---|---|
 | Formulários de cadastro (`/vagas/cadastrar`, `/talentos/cadastrar`, etc.) | `/api/public/content`, `/api/notify-admin`, `/api/storage/upload` |
 | `app/contato/page.tsx` | `/api/notify-admin` |
-| `app/admin/page.tsx` (moderação para publicação) | `/api/send-email` |
+| `app/admin/page.tsx` (moderação: aprovação e recusa) | `/api/send-email` |
 | `app/admin/page.tsx` (notícias, talentos, negócios) | `/api/storage/upload` |
-| `app/admin/page.tsx` (exclusão e troca de imagem de notícia) | `/api/admin/content` |
+| `app/admin/page.tsx` (exclusão, recusa e troca de imagem de notícia) | `/api/admin/content` |
 | Listagens públicas e admin (anexos privados) | `/api/storage/signed-url` |
 | `app/admin/emails/page.tsx` | `/api/send-campaign` |
 | `app/components/AnalyticsTracker.tsx` | `/api/track-visit` |
@@ -277,7 +278,9 @@ export const supabase = createClient(
 
 Novos envios usam **Supabase Storage** (`public-media` e `private-documents`) via `/api/storage/upload`. Valores antigos em Base64 e URLs externas (ex.: Gravatar) continuam válidos na leitura.
 
-A exclusão administrativa de Talentos, Vagas, Negócios, Notícias e Depoimentos passa por `DELETE /api/admin/content`: o servidor lê o registro, apaga a linha no banco e, só então, remove objetos reconhecidos do Storage. Base64, Gravatar e URLs que não sejam do nosso Storage não são enviados a `storage.remove`. Não há varredura de órfãos.
+A exclusão administrativa de Talentos, Vagas, Negócios, Notícias e Depoimentos passa por `DELETE /api/admin/content`: o servidor lê o registro, apaga a linha no banco e, só então, remove objetos reconhecidos do Storage. Base64, Gravatar e URLs que não sejam do nosso Storage não são enviados a `storage.remove`. Não há varredura de órfãos. Falha parcial do cleanup não restaura o registro.
+
+No painel, **Recusar** Talento, Vaga, Negócio ou Depoimento usa essa mesma operação. Os dados do e-mail de recusa ficam em memória; o e-mail é enviado só depois do DELETE confirmado. Falha no e-mail não recria o cadastro. Cadastros antigos com `status = rejected` podem permanecer até exclusão manual. Não há recuperação de recusa no painel atual.
 
 Quando o Admin troca a imagem de uma notícia, o UPDATE completo (texto + nova `image_url`) ocorre em `PATCH /api/admin/content`. Só após o UPDATE confirmado a imagem antiga válida é removida. Se o UPDATE falhar, o registro permanece e o arquivo novo usa o abort (`deleteToken`) já existente.
 

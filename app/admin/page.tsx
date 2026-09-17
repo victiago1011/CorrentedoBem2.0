@@ -1242,18 +1242,15 @@ export default function Dashboard() {
     if (!job) return;
 
     const email = job.contact_email || job.email;
+    const justification = rejectionJustification || 'Nenhuma';
+    const notify = isNotifyChecked;
 
-    const { data, error } = await supabase
-      .from('vagas')
-      .update({ status: 'rejected' })
-      .eq('id', id)
-      .select();
+    try {
+      const result = await deleteAdminContent('vaga', id);
+      setJobs(prev => prev.filter(j => String(j.id) !== String(id)));
+      triggerToast(adminCleanupToast('Vaga recusada.', result.cleanup));
 
-    if (!error && data && data.length > 0) {
-      setJobs(prev => prev.map(j => String(j.id) === String(id) ? { ...j, status: 'rejected' } : j));
-      triggerToast('Vaga recusada.');
-
-      if (isNotifyChecked && email) {
+      if (notify && email) {
         try {
           await sendNotificationEmail(
             email,
@@ -1278,19 +1275,20 @@ export default function Dashboard() {
           triggerToast(`Vaga recusada, mas erro ao enviar e-mail: ${mailError.message}`, 'error');
         }
       }
-      
+
       const historyEntry = {
         action: 'Vaga Recusada',
-        details: `Vaga "${job.title}" da empresa "${job.company}" foi recusada. Justificativa: ${rejectionJustification || 'Nenhuma'}`
+        details: `Vaga "${job.title}" da empresa "${job.company}" foi recusada. Justificativa: ${justification}`
       };
-      
+
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
-      
+
       setSelectedJob(null);
       setConfirmAction(null);
-    } else {
-      triggerToast(error ? `Erro: ${error.message}` : 'Erro ao recusar vaga.', 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao recusar vaga.';
+      triggerToast(`Erro: ${message}`, 'error');
     }
   }, [jobs, isNotifyChecked, rejectionJustification]);
 
@@ -1387,26 +1385,17 @@ export default function Dashboard() {
     if (!cand) return;
 
     const email = cand.email;
+    const justification = rejectionJustification || 'Nenhuma';
+    const notify = isNotifyChecked;
 
-    const { data, error } = await supabase
-      .from('talentos')
-      .update({ status: 'rejected' })
-      .eq('id', id)
-      .select(TALENT_LIST_FIELDS);
-
-    if (!error && data && data.length > 0) {
-      const light = toTalentListItem({ ...(data[0] as Candidate), status: 'rejected' });
+    try {
+      const result = await deleteAdminContent('talento', id);
       setCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
       setGalleryTalents(prev => prev.filter(c => String(c.id) !== String(id)));
-      setRejectedCandidates(prev => {
-        if (prev.some(c => String(c.id) === String(id))) {
-          return prev.map(c => String(c.id) === String(id) ? { ...c, ...light } : c);
-        }
-        return [light, ...prev];
-      });
-      triggerToast('Currículo recusado.');
+      setRejectedCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
+      triggerToast(adminCleanupToast('Currículo recusado.', result.cleanup));
 
-      if (isNotifyChecked && email) {
+      if (notify && email) {
         try {
           await sendNotificationEmail(
             email,
@@ -1431,19 +1420,20 @@ export default function Dashboard() {
           triggerToast(`Currículo recusado, mas erro ao enviar e-mail: ${mailError.message}`, 'error');
         }
       }
-      
+
       const historyEntry = {
         action: 'Currículo Recusado',
-        details: `Currículo de "${cand.name}" foi recusado. Justificativa: ${rejectionJustification || 'Nenhuma'}`
+        details: `Currículo de "${cand.name}" foi recusado. Justificativa: ${justification}`
       };
-      
+
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
-      
+
       setSelectedCandidate(null);
       setConfirmAction(null);
-    } else {
-      triggerToast(error ? `Erro: ${error.message}` : 'Erro ao recusar currículo.', 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao recusar currículo.';
+      triggerToast(`Erro: ${message}`, 'error');
     }
   }, [findCandidateById, isNotifyChecked, rejectionJustification]);
 
@@ -1505,19 +1495,15 @@ export default function Dashboard() {
     if (!testimonial) return;
 
     const email = testimonial.email;
+    const justification = rejectionJustification || 'Nenhuma';
+    const notify = isNotifyChecked;
 
-    const { data, error } = await supabase
-      .from('testimonials')
-      .update({ status: 'rejected' })
-      .eq('id', id)
-      .select()
-      .single();
+    try {
+      const result = await deleteAdminContent('depoimento', id);
+      setTestimonials(prev => prev.filter(t => String(t.id) !== String(id)));
+      triggerToast(adminCleanupToast('Depoimento recusado.', result.cleanup));
 
-    if (!error && data) {
-      setTestimonials(prev => prev.map(t => String(t.id) === String(id) ? data : t));
-      triggerToast('Depoimento recusado.');
-
-      if (isNotifyChecked && email) {
+      if (notify && email) {
         try {
           await sendNotificationEmail(
             email,
@@ -1545,15 +1531,16 @@ export default function Dashboard() {
 
       const historyEntry = {
         action: 'Depoimento Recusado',
-        details: `Depoimento de "${testimonial.name}" foi recusado. Justificativa: ${rejectionJustification || 'Nenhuma'}`
+        details: `Depoimento de "${testimonial.name}" foi recusado. Justificativa: ${justification}`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
 
       setSelectedTestimonial(null);
       setConfirmAction(null);
-    } else {
-      triggerToast(error ? error.message : 'Erro ao recusar depoimento', 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao recusar depoimento';
+      triggerToast(`Erro: ${message}`, 'error');
     }
   }, [testimonials, isNotifyChecked, rejectionJustification]);
 
@@ -2134,13 +2121,15 @@ export default function Dashboard() {
     if (!negocio) return;
 
     const email = negocio.contact_email;
+    const justification = rejectionJustification || 'Nenhuma';
+    const notify = isNotifyChecked;
 
-    const { data, error } = await supabase.from('negocios').update({ status: 'rejected' }).eq('id', id).select();
-    if (!error && data && data.length > 0) {
-      setNegocios(prev => prev.map(n => String(n.id) === String(id) ? { ...n, status: 'rejected' } : n));
-      triggerToast('Negócio recusado.');
+    try {
+      const result = await deleteAdminContent('negocio', id);
+      setNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
+      triggerToast(adminCleanupToast('Negócio recusado.', result.cleanup));
 
-      if (isNotifyChecked && email) {
+      if (notify && email) {
         try {
           await sendNotificationEmail(
             email,
@@ -2168,14 +2157,15 @@ export default function Dashboard() {
 
       const { data: hData } = await supabase.from('history').insert({
         action: 'Negócio Recusado',
-        details: `Negócio "${negocio.title}" foi recusado. Justificativa: ${rejectionJustification || 'Nenhuma'}`
+        details: `Negócio "${negocio.title}" foi recusado. Justificativa: ${justification}`
       }).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
 
       setSelectedNegocio(null);
       setConfirmAction(null);
-    } else {
-      triggerToast(error ? `Erro: ${error.message}` : 'Erro ao recusar negócio.', 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao recusar negócio.';
+      triggerToast(`Erro: ${message}`, 'error');
     }
   }, [negocios, isNotifyChecked, rejectionJustification]);
 
