@@ -3,10 +3,9 @@
 import React, { useState } from 'react';
 import { CheckCircle2, ArrowLeft } from 'lucide-react';
 import { motion } from 'motion/react';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import JobForm, { type JobFormValues } from '@/app/components/forms/JobForm';
-import { LEGAL_VERSION } from '@/lib/legal';
+import { submitPublicContent } from '@/lib/public-content-api';
 
 export default function CadastrarVagaPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,37 +15,22 @@ export default function CadastrarVagaPage() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.from('vagas').insert([
-        {
-          title: formData.title,
-          company: formData.company,
-          email: formData.email,
-          phone: formData.phone,
-          site_url: formData.site_url,
-          location: formData.location,
-          type: formData.type,
-          area: formData.area,
-          salary: formData.salary,
-          description: formData.description,
-          attachment_url: formData.attachment_url,
-          logo_url: formData.logo_url || null,
-          requirements: formData.requirements,
-          status: 'pending',
-          terms_accepted: true,
-          terms_accepted_at: new Date().toISOString(),
-          terms_version: LEGAL_VERSION,
-        },
-      ]);
-
-      if (error) {
-        console.error('Erro detalhado do Supabase (Jobs):', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        });
-        throw error;
-      }
+      await submitPublicContent('vaga', {
+        title: formData.title,
+        company: formData.company,
+        email: formData.email,
+        phone: formData.phone,
+        site_url: formData.site_url,
+        location: formData.location,
+        type: formData.type,
+        area: formData.area,
+        salary: formData.salary,
+        description: formData.description,
+        attachment_url: formData.attachment_url,
+        logo_url: formData.logo_url || '',
+        requirements: formData.requirements,
+        terms_accepted: true,
+      });
 
       try {
         await fetch('/api/notify-admin', {

@@ -35,8 +35,8 @@ O projeto é uma aplicação web **monolítica** construída com **Next.js 15 (A
 │  /api/send-email  /api/send-campaign  /api/unsubscribe          │
 │  /api/track-visit /api/track-click                              │
 │  /api/storage/upload  /api/storage/signed-url                   │
-│  /api/admin/content                                             │
-│  Upload/cleanup usam lib/supabase-admin.ts (service_role)       │
+│  /api/admin/content  /api/public/content                        │
+│  Upload/cleanup/cadastro público usam lib/supabase-admin.ts     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -88,6 +88,8 @@ Contém **tudo** que o Next.js serve: páginas públicas, painel admin, rotas de
 | `storage-object-ref.ts` | Parser seguro de URL/path do Storage e extração de refs por entidade |
 | `storage-cleanup.ts` | Remoção server-only de objetos já validados (`service_role`) |
 | `admin-content-api.ts` | Cliente do Admin para DELETE/PATCH em `/api/admin/content` |
+| `public-content.ts` | Whitelist e INSERT server-side dos cadastros públicos (`server-only`) |
+| `public-content-api.ts` | Cliente dos formulários públicos para `POST /api/public/content` |
 | `media-src.ts` | Compatibilidade Base64 / URL pública / path privado |
 | `utils.ts` | Funções utilitárias: `cn`, `maskPhone`, `maskCurrency`, `ensureExternalLink`, `stripHtml` |
 
@@ -192,7 +194,8 @@ app/api/
 ├── track-click/route.ts     GET  — registra clique e redireciona
 ├── storage/upload/route.ts  POST — upload server-side; DELETE — aborto com token
 ├── storage/signed-url/route.ts POST — URL temporária de documento privado
-└── admin/content/route.ts   DELETE — exclusão de registro + cleanup; PATCH — notícia com nova imagem
+├── admin/content/route.ts   DELETE — exclusão de registro + cleanup; PATCH — notícia com nova imagem
+└── public/content/route.ts  POST — cadastro público (Talentos, Vagas, Negócios, Depoimentos)
 ```
 
 ### Detalhe de cada rota
@@ -209,12 +212,13 @@ app/api/
 | `POST /api/storage/signed-url` | `{ kind, recordId, index }` | JSON `{ url, expiresIn }` | PostgreSQL + Storage signed URL |
 | `DELETE /api/admin/content` | `{ type, id }` | JSON `{ deleted, cleanup }` | PostgreSQL + Storage (`service_role`) |
 | `PATCH /api/admin/content` | `{ type: 'noticia', id, title, content, excerpt, image_url, author, category }` | JSON `{ updated, cleanup, record }` | PostgreSQL + Storage (`service_role`) |
+| `POST /api/public/content` | `{ type, data }` (`talento` \| `vaga` \| `negocio` \| `depoimento`) | JSON `{ ok }` | PostgreSQL (`service_role`) |
 
 ### Quem chama as API Routes
 
 | Chamador | Rotas usadas |
 |---|---|
-| Formulários de cadastro (`/vagas/cadastrar`, `/talentos/cadastrar`, etc.) | `/api/notify-admin`, `/api/storage/upload` |
+| Formulários de cadastro (`/vagas/cadastrar`, `/talentos/cadastrar`, etc.) | `/api/public/content`, `/api/notify-admin`, `/api/storage/upload` |
 | `app/contato/page.tsx` | `/api/notify-admin` |
 | `app/admin/page.tsx` (moderação para publicação) | `/api/send-email` |
 | `app/admin/page.tsx` (notícias, talentos, negócios) | `/api/storage/upload` |
@@ -224,7 +228,7 @@ app/api/
 | `app/components/AnalyticsTracker.tsx` | `/api/track-visit` |
 | Links em campanhas de e-mail | `/api/track-click`, `/api/unsubscribe` |
 
-Parte das API Routes públicas (tracking, unsubscribe, notify-admin) **não exige login**. Rotas administrativas (`/api/send-email`, `/api/send-campaign`, `/api/newsletter-subscribers/search`, `/api/admin/content` e upload `news-image`) validam sessão via `requireAdmin`.
+Parte das API Routes públicas (tracking, unsubscribe, notify-admin, `/api/public/content`) **não exige login**. Rotas administrativas (`/api/send-email`, `/api/send-campaign`, `/api/newsletter-subscribers/search`, `/api/admin/content` e upload `news-image`) validam sessão via `requireAdmin`.
 
 ---
 
@@ -243,17 +247,17 @@ export const supabase = createClient(
 ```
 
 - Cliente **anon** em `lib/supabase.ts` — navegador e rotas que não precisam de `service_role`
-- Cliente **service_role** em `lib/supabase-admin.ts` — somente servidor (`server-only`), usado em upload, signed URL e `/api/admin/content`
+- Cliente **service_role** em `lib/supabase-admin.ts` — somente servidor (`server-only`), usado em upload, signed URL, `/api/admin/content` e `/api/public/content`
 
 ### Tabelas utilizadas pela aplicação
 
 | Tabela | Operações no código |
 |---|---|
-| `vagas` | SELECT (público), INSERT (cadastro), UPDATE/DELETE (admin) |
-| `talentos` | SELECT (público), INSERT (cadastro), UPDATE/DELETE (admin) |
-| `negocios` | SELECT (público), INSERT (cadastro), UPDATE/DELETE (admin) |
+| `vagas` | SELECT (público), INSERT via `/api/public/content` e Admin, UPDATE/DELETE (admin) |
+| `talentos` | SELECT (público), INSERT via `/api/public/content` e Admin, UPDATE/DELETE (admin) |
+| `negocios` | SELECT (público), INSERT via `/api/public/content` e Admin, UPDATE/DELETE (admin) |
 | `noticias` | SELECT (público), INSERT/UPDATE/DELETE (admin) |
-| `testimonials` | SELECT (público), INSERT (cadastro), UPDATE/DELETE (admin) |
+| `testimonials` | SELECT (público), INSERT via `/api/public/content` e Admin, UPDATE/DELETE (admin) |
 | `contatos` | Nenhuma operação no código (tabela legada no Supabase; não lida nem alimentada pela aplicação) |
 | `settings` | SELECT/UPDATE (admin) |
 | `history` | INSERT (admin, API), SELECT (admin) |
@@ -265,9 +269,9 @@ export const supabase = createClient(
 | Contexto | Arquivos |
 |---|---|
 | Páginas públicas | `app/page.tsx`, `app/vagas/page.tsx`, `app/talentos/page.tsx`, `app/negocios/page.tsx`, `app/noticias/page.tsx`, `app/noticias/[slug]/page.tsx`, `app/depoimentos/page.tsx` |
-| Formulários de cadastro | `app/vagas/cadastrar/page.tsx`, `app/talentos/cadastrar/page.tsx`, `app/negocios/cadastrar/page.tsx`, `app/depoimentos/novo/page.tsx` |
+| Formulários de cadastro | `app/vagas/cadastrar/page.tsx`, `app/talentos/cadastrar/page.tsx`, `app/negocios/cadastrar/page.tsx`, `app/depoimentos/novo/page.tsx` (INSERT via `/api/public/content`; listagens públicas continuam no cliente) |
 | Admin | `app/admin/page.tsx`, `app/admin/emails/page.tsx`, `app/admin/login/page.tsx` |
-| API Routes | `app/api/send-campaign/route.ts`, `app/api/unsubscribe/route.ts`, `app/api/track-visit/route.ts`, `app/api/track-click/route.ts`, `app/api/storage/upload/route.ts`, `app/api/storage/signed-url/route.ts`, `app/api/admin/content/route.ts` |
+| API Routes | `app/api/send-campaign/route.ts`, `app/api/unsubscribe/route.ts`, `app/api/track-visit/route.ts`, `app/api/track-click/route.ts`, `app/api/storage/upload/route.ts`, `app/api/storage/signed-url/route.ts`, `app/api/admin/content/route.ts`, `app/api/public/content/route.ts` |
 
 ### Armazenamento de arquivos
 
@@ -406,10 +410,13 @@ O projeto usa **Supabase Auth** exclusivamente para o painel administrativo. Vis
 Usuário preenche formulário
         │
         ▼
-INSERT no Supabase (status: 'pending')
+POST /api/storage/upload (se houver arquivo)
         │
         ▼
-POST /api/send-email → notifica admin
+POST /api/public/content → INSERT server-side (status: 'pending')
+        │
+        ▼
+POST /api/notify-admin → notifica admin
         │
         ▼
 Admin vê item em /admin (aba Pendentes)

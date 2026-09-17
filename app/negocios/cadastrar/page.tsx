@@ -26,11 +26,10 @@ import dynamic from 'next/dynamic';
 const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 import 'react-quill-new/dist/quill.snow.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 import { maskPhone } from '@/lib/utils';
-import { LEGAL_VERSION } from '@/lib/legal';
+import { submitPublicContent } from '@/lib/public-content-api';
 import {
   IMAGE_MIME_TYPES,
   MIXED_ATTACHMENT_MIME_TYPES,
@@ -229,40 +228,22 @@ export default function CadastrarNegocioPage() {
         storedAttachments.push({ name: attachment.name, url: docRef.path });
       }
 
-      const acceptedAt = new Date().toISOString();
-      const { error } = await supabase
-        .from('negocios')
-        .insert([{
-          title: formData.title,
-          owner_name: formData.owner_name,
-          contact_name: formData.contact_name,
-          contact_email: formData.contact_email || null,
-          contact_phone: formData.contact_phone || null,
-          location: formData.location || null,
-          link: formData.link || null,
-          type: formData.type || null,
-          area: formData.area || null,
-          description: formData.description || null,
-          attachment_url: storedAttachments.length > 0 ? JSON.stringify(storedAttachments) : null,
-          logo_url: logoUrl,
-          status: 'pending',
-          terms_accepted: true,
-          terms_accepted_at: acceptedAt,
-          terms_version: LEGAL_VERSION,
-          privacy_consent: true,
-          privacy_consent_at: acceptedAt,
-          privacy_policy_version: LEGAL_VERSION,
-        }]);
-
-      if (error) {
-        console.error('Erro detalhado do Supabase:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        throw new Error(`${error.message} (${error.hint || 'Sem dicas adicionais'})`);
-      }
+      await submitPublicContent('negocio', {
+        title: formData.title,
+        owner_name: formData.owner_name,
+        contact_name: formData.contact_name,
+        contact_email: formData.contact_email,
+        contact_phone: formData.contact_phone,
+        location: formData.location,
+        link: formData.link,
+        type: formData.type,
+        area: formData.area,
+        description: formData.description,
+        attachment_url: storedAttachments.length > 0 ? JSON.stringify(storedAttachments) : '',
+        logo_url: logoUrl || '',
+        terms_accepted: true,
+        privacy_consent: true,
+      });
 
       // Enviar notificação de e-mail ao administrador
       try {

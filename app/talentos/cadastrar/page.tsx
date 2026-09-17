@@ -23,9 +23,8 @@ import dynamic from 'next/dynamic';
 const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 import 'react-quill-new/dist/quill.snow.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '@/lib/supabase';
-import { LEGAL_VERSION } from '@/lib/legal';
 import Link from 'next/link';
+import { submitPublicContent } from '@/lib/public-content-api';
 import Image from 'next/image';
 import { maskPhone } from '@/lib/utils';
 import {
@@ -243,30 +242,20 @@ export default function CadastrarTalentoPage() {
         resumeItems.push({ name: resume.name, url: docRef.path });
       }
 
-      const acceptedAt = new Date().toISOString();
-      const { resume_url: _resumeUrl, image: _image, ...rest } = formData;
-      const submissionData = {
-        ...rest,
+      await submitPublicContent('talento', {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        location: formData.location,
+        area: formData.area,
+        role: formData.role,
+        summary: formData.summary,
+        skills: formData.skills,
         image: imageValue,
         cv_url: resumeItems.length > 0 ? JSON.stringify(resumeItems) : '',
-        status: 'pending',
         terms_accepted: true,
-        terms_accepted_at: acceptedAt,
-        terms_version: LEGAL_VERSION,
         privacy_consent: true,
-        privacy_consent_at: acceptedAt,
-        privacy_policy_version: LEGAL_VERSION,
-      };
-
-      const { error } = await supabase
-        .from('talentos')
-        .insert([submissionData])
-        .select();
-
-      if (error) {
-        console.error('Erro Supabase:', error);
-        throw new Error(error.message);
-      }
+      });
 
       try {
         await fetch('/api/notify-admin', {

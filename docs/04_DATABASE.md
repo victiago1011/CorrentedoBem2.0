@@ -33,7 +33,7 @@ Módulos com consentimento registrado no cadastro público:
 - Negócios
 - Depoimentos
 
-Cadastros públicos novos gravam o aceite. Cadastros anteriores e cadastros feitos pelo Admin permanecem com os campos de consentimento `NULL` (**Consentimento não registrado**). Não há backfill de consentimento.
+Cadastros públicos novos passam por `POST /api/public/content`, que grava com `status = 'pending'` usando `service_role` no servidor. O visitante não faz INSERT direto no Data API.
 
 ### Fase 1 — Talentos e Vagas
 

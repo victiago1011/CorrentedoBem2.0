@@ -17,9 +17,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase';
-import { LEGAL_VERSION } from '@/lib/legal';
 import { useRouter } from 'next/navigation';
+import { submitPublicContent } from '@/lib/public-content-api';
 import Cropper from 'react-easy-crop';
 import { canvasToOptimizedFile } from '@/lib/optimize-image';
 import {
@@ -135,7 +134,6 @@ export default function NewTestimonial() {
     const uploaded: StorageObjectRef[] = [];
 
     const formData = new FormData(e.currentTarget);
-    const acceptedAt = new Date().toISOString();
 
     try {
       let storedPhoto = '';
@@ -153,23 +151,16 @@ export default function NewTestimonial() {
         name: formData.get('name') as string,
         role: formData.get('role') as string,
         company: formData.get('company') as string,
-        email: formData.get('email') as string || null,
+        email: (formData.get('email') as string) || '',
         content: formData.get('content') as string,
-        photo_url: storedPhoto,
-        status: 'pending',
-        terms_accepted: true,
-        terms_accepted_at: acceptedAt,
-        terms_version: LEGAL_VERSION,
-        privacy_consent: true,
-        privacy_consent_at: acceptedAt,
-        privacy_policy_version: LEGAL_VERSION,
       };
 
-      const { error } = await supabase
-        .from('testimonials')
-        .insert(testimonialData);
-
-      if (error) throw error;
+      await submitPublicContent('depoimento', {
+        ...testimonialData,
+        photo_url: storedPhoto,
+        terms_accepted: true,
+        privacy_consent: true,
+      });
 
       // Enviar notificação de e-mail ao administrador
       try {
