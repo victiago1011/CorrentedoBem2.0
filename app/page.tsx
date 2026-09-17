@@ -36,14 +36,14 @@ import { cn, ensureExternalLink, stripHtml } from '@/lib/utils';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
 import { publicUnexpiredOrFilter, isWithinPublicWindow } from '@/lib/legal';
+import { FileAttachments } from '@/app/components/FileAttachments';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc } from '@/lib/media-src';
 
 // Helper component for candidate images with error fallback
 const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: string; name: string; className?: string }) => {
   const [error, setError] = React.useState(false);
-  const isFallback = !src || src.includes('gravatar') || src.includes('dicebear');
-  
-  // If it's a known problematic source or has error, handle according
-  if (error || !src) {
+  const mediaSrc = resolvePublicMediaSrc(src) || src;
+  if (error || !mediaSrc) {
     return (
       <div className="w-full h-full bg-[#f6f3f2] flex items-center justify-center text-[#bec8d1] border border-[#bec8d1]/20">
         <User className="w-1/2 h-1/2" />
@@ -53,12 +53,12 @@ const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: stri
 
   return (
     <Image 
-      src={src} 
+      src={mediaSrc} 
       alt={name} 
       fill 
       className={className} 
       referrerPolicy="no-referrer"
-      unoptimized={src.includes('dicebear')} // Dicebear SVGs don't need optimization and often fail in Next.js proxy
+      unoptimized={needsUnoptimizedMedia(src)}
       onError={() => setError(true)}
     />
   );
@@ -72,22 +72,25 @@ interface Job {
   type: string;
   area: string;
   status: 'pending' | 'active' | 'rejected' | 'closed';
-  salary: string;
-  description: string;
-  requirements: string[];
+  salary?: string;
+  description?: string;
+  requirements?: string[];
   logo_url?: string;
   site_url?: string;
   contact_email?: string;
   contact_phone?: string;
+  email?: string;
+  phone?: string;
   attachment_url?: string;
+  verified?: boolean;
   created_at?: string;
 }
 
 interface Candidate {
   id: string;
   name: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   location: string;
   area: string;
   status: 'pending' | 'active' | 'rejected';
@@ -100,30 +103,6 @@ interface Candidate {
   created_at?: string;
   expires_at?: string | null;
 }
-
-interface Attachment {
-  name: string;
-  url: string;
-}
-
-const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'Anexo'): Attachment[] => {
-  if (!urlOrJson) return [];
-  try {
-    const trimmed = urlOrJson.trim();
-    if (trimmed.startsWith('[')) {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item: any) => ({
-          name: item.name || defaultName,
-          url: item.url || item.data || ''
-        })).filter(item => item.url);
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-  return [{ name: defaultName, url: urlOrJson }];
-};
 
 export default function LandingPage() {
   const router = useRouter();
@@ -147,13 +126,13 @@ export default function LandingPage() {
       const [jobsRes, candidatesRes, testimonialsRes] = await Promise.all([
         supabase
           .from('vagas')
-          .select('id, title, company, location, type, area, status, salary, description, requirements, logo_url, site_url, email, phone, attachment_url, created_at, verified')
+          .select('id, title, company, location, type, area, status, salary, description, logo_url, created_at, verified')
           .in('status', ['active', 'approved'])
           .order('created_at', { ascending: false })
           .limit(3),
         supabase
           .from('talentos')
-          .select('id, name, email, phone, location, area, status, role, summary, skills, image, cv_url, verified, created_at, expires_at')
+          .select('id, name, location, area, status, role, summary, skills, image, verified, created_at, expires_at')
           .in('status', ['active', 'approved'])
           .or(publicUnexpiredOrFilter())
           .order('created_at', { ascending: false })
@@ -190,6 +169,34 @@ export default function LandingPage() {
     }
     fetchFeaturedData();
   }, []);
+
+  const openJobDetail = async (job: Job) => {
+    setSelectedJob(job);
+    const { data, error } = await supabase
+      .from('vagas')
+      .select('id, title, company, location, type, area, status, salary, description, requirements, logo_url, site_url, email, phone, attachment_url, created_at, verified')
+      .eq('id', job.id)
+      .maybeSingle();
+    if (error) {
+      console.error('Erro ao carregar vaga:', error);
+      return;
+    }
+    if (data) setSelectedJob(data);
+  };
+
+  const openCandidateDetail = async (candidate: Candidate) => {
+    setSelectedCandidate(candidate);
+    const { data, error } = await supabase
+      .from('talentos')
+      .select('id, name, email, phone, location, area, status, role, summary, skills, image, cv_url, verified, created_at, expires_at')
+      .eq('id', candidate.id)
+      .maybeSingle();
+    if (error) {
+      console.error('Erro ao carregar talento:', error);
+      return;
+    }
+    if (data) setSelectedCandidate({ ...data, skills: Array.isArray(data.skills) ? data.skills : [] });
+  };
 
   const handleSearch = () => {
     if (searchValue.trim()) {
@@ -312,7 +319,7 @@ export default function LandingPage() {
                     <div className="flex justify-between items-start mb-6">
                       <div className="w-16 h-16 rounded-2xl bg-[#c8e6ff] flex items-center justify-center relative overflow-hidden">
                         {job.logo_url ? (
-                          <Image src={job.logo_url} alt={job.company} fill className="object-contain p-2" referrerPolicy="no-referrer" />
+                          <Image src={resolvePublicMediaSrc(job.logo_url) || job.logo_url} alt={job.company} fill className="object-contain p-2" referrerPolicy="no-referrer" unoptimized={needsUnoptimizedMedia(job.logo_url)} />
                         ) : (
                           <Briefcase className="w-8 h-8 text-[#00628c]" />
                         )}
@@ -324,13 +331,13 @@ export default function LandingPage() {
                     </div>
                     <h3 className="text-xl lg:text-2xl font-bold text-[#1b1c1c] mb-2 font-headline line-clamp-1">{job.title}</h3>
                     <p className="text-[#964900] font-bold text-sm mb-4">{job.company}</p>
-                    <p className="text-[#3e4850] mb-6 leading-relaxed line-clamp-3 text-sm flex-grow">{stripHtml(job.description)}</p>
+                    <p className="text-[#3e4850] mb-6 leading-relaxed line-clamp-3 text-sm flex-grow">{stripHtml(job.description || '')}</p>
                     <div className="flex flex-wrap items-center gap-3 text-xs text-[#3e4850] font-medium mb-8">
                       <span className="flex items-center gap-1 bg-[#f6f3f2] px-2.5 py-1 rounded-full"><MapPin className="w-3.5 h-3.5 text-[#00628c]" /> {job.location}</span>
                       {job.salary && <span className="flex items-center gap-1 bg-[#f6f3f2] px-2.5 py-1 rounded-full"><DollarSign className="w-3.5 h-3.5 text-[#00628c]" /> {job.salary}</span>}
                     </div>
                     <button 
-                      onClick={() => setSelectedJob(job)}
+                      onClick={() => openJobDetail(job)}
                       className="block w-full py-4 bg-[#f0eded] text-[#1b1c1c] font-bold rounded-xl hover:bg-[#00628c] hover:text-white transition-colors text-center"
                     >
                       Detalhes
@@ -374,7 +381,7 @@ export default function LandingPage() {
                   <div className="flex items-center gap-4 mb-8">
                     <div className="w-16 h-16 bg-[#c8e6ff] rounded-2xl flex items-center justify-center text-[#00628c] relative overflow-hidden">
                       {selectedJob.logo_url ? (
-                        <Image src={selectedJob.logo_url} alt={selectedJob.company} fill className="object-contain p-2" referrerPolicy="no-referrer" />
+                        <Image src={resolvePublicMediaSrc(selectedJob.logo_url) || selectedJob.logo_url} alt={selectedJob.company} fill className="object-contain p-2" referrerPolicy="no-referrer" unoptimized={needsUnoptimizedMedia(selectedJob.logo_url)} />
                       ) : (
                         <Briefcase className="w-8 h-8" />
                       )}
@@ -431,7 +438,7 @@ export default function LandingPage() {
                     <div>
                       <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#00628c] mb-4">Descrição da Vaga</h3>
                       <div 
-                        dangerouslySetInnerHTML={{ __html: selectedJob.description }} 
+                        dangerouslySetInnerHTML={{ __html: selectedJob.description || '' }} 
                         className="text-[#3e4850] leading-relaxed text-sm md:text-base rich-text-content prose prose-sm max-w-none"
                       />
                     </div>
@@ -453,28 +460,7 @@ export default function LandingPage() {
                     {selectedJob.attachment_url && (
                       <div className="pt-6 border-t border-[#f6f3f2]">
                         <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#00628c] mb-4">Anexo(s) / Arquivo(s)</h3>
-                        <div className="space-y-3">
-                          {parseAttachments(selectedJob.attachment_url).map((attachment, index) => (
-                            <a 
-                              key={index}
-                              href={attachment.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              download={attachment.name}
-                              className="flex items-center gap-3 p-4 bg-[#f6f3f2] rounded-2xl hover:bg-[#c8e6ff]/20 transition-all border border-transparent hover:border-[#00628c]/10"
-                            >
-                              <div className="w-10 h-10 rounded-xl bg-[#c8e6ff] flex items-center justify-center text-[#00628c]">
-                                <Paperclip className="w-5 h-5" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-black text-[#00628c] uppercase tracking-wider truncate" title={attachment.name}>
-                                  {attachment.name}
-                                </p>
-                                <p className="text-[10px] text-[#6f7881]">Clique para baixar o arquivo anexado</p>
-                              </div>
-                            </a>
-                          ))}
-                        </div>
+                        <FileAttachments value={selectedJob.attachment_url} compact kind="job-attachment" recordId={selectedJob.id} />
                       </div>
                     )}
 
@@ -586,28 +572,7 @@ export default function LandingPage() {
                     {selectedCandidate.cv_url && (
                       <div className="pt-6 border-t border-[#f6f3f2]">
                         <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#00628c] mb-4">Currículo(s) Anexo(s)</h3>
-                        <div className="space-y-3">
-                          {parseAttachments(selectedCandidate.cv_url).map((attachment, index) => (
-                            <a 
-                              key={index}
-                              href={attachment.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              download={attachment.name}
-                              className="flex items-center gap-4 p-4 bg-[#f6f3f2] rounded-2xl hover:bg-[#c8e6ff]/20 transition-all border border-transparent hover:border-[#00628c]/10"
-                            >
-                              <div className="w-12 h-12 rounded-xl bg-[#c8e6ff] flex items-center justify-center text-[#00628c]">
-                                <Paperclip className="w-6 h-6" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-black text-[#00628c] uppercase tracking-wider truncate" title={attachment.name}>
-                                  {attachment.name}
-                                </p>
-                                <p className="text-[10px] text-[#6f7881]">Clique para baixar o arquivo anexado</p>
-                              </div>
-                            </a>
-                          ))}
-                        </div>
+                        <FileAttachments value={selectedCandidate.cv_url} defaultName="Currículo" kind="talent-cv" recordId={selectedCandidate.id} />
                       </div>
                     )}
 
@@ -664,7 +629,7 @@ export default function LandingPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.1 }}
                     className="bg-white p-6 lg:p-8 rounded-[2.5rem] shadow-xl shadow-[#00628c]/5 border border-[#bec8d1]/10 flex flex-col h-full relative group cursor-pointer active:scale-95 transition-all"
-                    onClick={() => setSelectedCandidate(cand)}
+                    onClick={() => openCandidateDetail(cand)}
                   >
                     <div className="flex items-start gap-4 mb-6">
                       <div className="relative w-16 h-16 lg:w-20 lg:h-20 rounded-2xl overflow-hidden shadow-inner shrink-0 border-2 border-[#bff444] bg-[#f6f3f2]">
@@ -945,14 +910,15 @@ export default function LandingPage() {
                         "w-14 h-14 rounded-full overflow-hidden border-2",
                         idx % 2 === 0 ? "border-[#fc820c]" : "border-white/40"
                       )}>
-                        {t.photo_url ? (
+                        {t.photo_url && resolvePublicMediaSrc(t.photo_url) ? (
                           <Image 
                             alt={t.name}
                             className="w-full h-full object-cover" 
-                            src={t.photo_url} 
+                            src={resolvePublicMediaSrc(t.photo_url)!} 
                             width={56}
                             height={56}
                             referrerPolicy="no-referrer"
+                            unoptimized={needsUnoptimizedMedia(t.photo_url)}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-400">

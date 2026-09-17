@@ -85,5 +85,5 @@ Não altera `published_at`, consentimento, status nem registros com janela NULL.
 
 Exibidos quando `status = 'active'` e (`expires_at IS NULL` ou `expires_at > now()`). Não há cron nem exclusão física. O Admin continua vendo o registro.
 
-Não existe rotina de exclusão automática. Foto, currículo, logo e anexos continuam em Base64 nas colunas do banco (sem Supabase Storage).
+Não existe rotina de exclusão automática. Foto, currículo, logo e anexos podem estar em Base64 (registros antigos), URL pública do bucket `public-media` ou path privado em `private-documents`.
 

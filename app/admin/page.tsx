@@ -62,13 +62,24 @@ import { useRouter } from 'next/navigation';
 
 import Link from 'next/link';
 import JobForm, { type JobFormValues } from '@/app/components/forms/JobForm';
+import { FileAttachments } from '@/app/components/FileAttachments';
+import {
+  DOCUMENT_MIME_TYPES,
+  GRAVATAR_PLACEHOLDER,
+  IMAGE_MIME_TYPES,
+  MIXED_ATTACHMENT_MIME_TYPES,
+  SIGNED_FILE_KINDS,
+  UPLOAD_CATEGORY_IDS,
+  UPLOAD_LIMITS,
+} from '@/lib/storage-config';
+import { needsUnoptimizedMedia, parseAttachments, resolvePublicMediaSrc } from '@/lib/media-src';
+import { openStoredAttachment, removeUploaded, uploadPublicImage, uploadToStorage, type StorageObjectRef } from '@/lib/storage-upload';
 
 // Helper component for candidate images with error fallback
 const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: string; name: string; className?: string }) => {
   const [error, setError] = React.useState(false);
-  const isGravatar = !src || src.includes('gravatar');
-
-  if (error || isGravatar) {
+  const mediaSrc = resolvePublicMediaSrc(src);
+  if (error || !mediaSrc || mediaSrc.includes('gravatar')) {
     return (
       <div className="w-full h-full bg-[#f6f3f2] flex items-center justify-center text-[#bec8d1] border border-[#bec8d1]/20">
         <User className="w-1/2 h-1/2" />
@@ -78,39 +89,15 @@ const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: stri
 
   return (
     <Image 
-      src={src} 
+      src={mediaSrc} 
       alt={name} 
       fill 
       className={className} 
       referrerPolicy="no-referrer"
-      unoptimized={src.includes('dicebear')}
+      unoptimized={needsUnoptimizedMedia(src)}
       onError={() => setError(true)}
     />
   );
-};
-
-interface Attachment {
-  name: string;
-  url: string;
-}
-
-const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'Anexo'): Attachment[] => {
-  if (!urlOrJson) return [];
-  try {
-    const trimmed = urlOrJson.trim();
-    if (trimmed.startsWith('[')) {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item: any) => ({
-          name: item.name || defaultName,
-          url: item.url || item.data || ''
-        })).filter(item => item.url);
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-  return [{ name: defaultName, url: urlOrJson }];
 };
 
   // --- Types ---
@@ -615,22 +602,25 @@ export default function Dashboard() {
   ];
 
   // Candidate/Talento registration states
-  const [candImage, setCandImage] = useState('https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y');
+  const [candImage, setCandImage] = useState(GRAVATAR_PLACEHOLDER);
+  const [candImageFile, setCandImageFile] = useState<File | null>(null);
+  const [candResumes, setCandResumes] = useState<{ name: string; size: number; file?: File; url?: string }[]>([]);
   const [candSkills, setCandSkills] = useState<string[]>([]);
   const [candSkillInput, setCandSkillInput] = useState('');
-  const [candResumes, setCandResumes] = useState<{ name: string; url: string }[]>([]);
   const [candSummary, setCandSummary] = useState('');
   const candImageInputRef = React.useRef<HTMLInputElement>(null);
   const candResumeInputRef = React.useRef<HTMLInputElement>(null);
 
   // Business/Negocio registration states
   const [negLogoUrl, setNegLogoUrl] = useState('');
+  const [negLogoFile, setNegLogoFile] = useState<File | null>(null);
   const [negDescription, setNegDescription] = useState('');
-  const [negAttachments, setNegAttachments] = useState<{ name: string; url: string }[]>([]);
+  const [negAttachments, setNegAttachments] = useState<{ name: string; size: number; file?: File; url?: string }[]>([]);
   const negLogoInputRef = React.useRef<HTMLInputElement>(null);
   const negAttachmentInputRef = React.useRef<HTMLInputElement>(null);
   const [newsContent, setNewsContent] = useState('');
   const [newsImageUrl, setNewsImageUrl] = useState('');
+  const [newsImageFile, setNewsImageFile] = useState<File | null>(null);
   const [isEditorExpanded, setIsEditorExpanded] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
@@ -680,19 +670,20 @@ export default function Dashboard() {
     payload?: any;
   } | null>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (preview: string) => void) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        triggerToast('Imagem muito grande! Máximo 2MB.', 'error');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        callback(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    const mime = (file.type || '').toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(mime as (typeof IMAGE_MIME_TYPES)[number])) {
+      triggerToast('Envie uma imagem em JPEG, PNG, WebP ou GIF.', 'error');
+      return;
     }
+    if (file.size > UPLOAD_LIMITS.newsImageBytes) {
+      triggerToast('Imagem muito grande! Máximo 8MB.', 'error');
+      return;
+    }
+    setNewsImageFile(file);
+    callback(URL.createObjectURL(file));
   };
 
   const quillModules = {
@@ -1629,27 +1620,34 @@ export default function Dashboard() {
       if (hData) setHistory(prev => [hData, ...prev]);
     } else if (error) {
       triggerToast(`Erro ao salvar vaga: ${error.message}`, 'error');
+      throw error;
     }
   }, []);
 
   // Candidate Registration Handlers
   const handleCandImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 3 * 1024 * 1024) {
-        setErrorModal({
-          isOpen: true,
-          title: 'Arquivo Grande Demais',
-          message: 'O arquivo excede o limite individual de 3MB.'
-        });
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCandImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    const mime = (file.type || '').toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(mime as (typeof IMAGE_MIME_TYPES)[number])) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo não permitido',
+        message: 'Envie uma imagem em JPEG, PNG, WebP ou GIF.',
+      });
+      return;
     }
+    if (file.size > UPLOAD_LIMITS.profileImageBytes) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo Grande Demais',
+        message: 'A foto deve ter no máximo 5MB.',
+      });
+      return;
+    }
+    if (candImage.startsWith('blob:')) URL.revokeObjectURL(candImage);
+    setCandImageFile(file);
+    setCandImage(URL.createObjectURL(file));
   };
 
   const addCandSkill = () => {
@@ -1669,14 +1667,20 @@ export default function Dashboard() {
     const files = e.target.files;
     if (files && files.length > 0) {
       const newList = [...candResumes];
-      let currentTotalSize = candResumes.reduce((acc, a) => {
-        const base64Str = a.url.split(',')[1] || '';
-        return acc + (base64Str.length * 0.75);
-      }, 0);
+      let currentTotalSize = candResumes.reduce((acc, a) => acc + a.size, 0);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (file.size > 3 * 1024 * 1024) {
+        const mime = (file.type || '').toLowerCase();
+        if (!DOCUMENT_MIME_TYPES.includes(mime as (typeof DOCUMENT_MIME_TYPES)[number])) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo não permitido',
+            message: `O arquivo "${file.name}" precisa ser PDF, DOC ou DOCX.`,
+          });
+          continue;
+        }
+        if (file.size > UPLOAD_LIMITS.documentBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Arquivo Grande Demais',
@@ -1684,7 +1688,7 @@ export default function Dashboard() {
           });
           continue;
         }
-        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+        if (currentTotalSize + file.size > UPLOAD_LIMITS.documentsTotalBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Limite Combinado Excedido',
@@ -1693,14 +1697,7 @@ export default function Dashboard() {
           break;
         }
 
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        newList.push({ name: file.name, url: dataUrl });
+        newList.push({ name: file.name, size: file.size, file });
         currentTotalSize += file.size;
       }
       setCandResumes(newList);
@@ -1725,27 +1722,55 @@ export default function Dashboard() {
     }
 
     const publication = getTalentPublicationWindow();
-    const candData = {
-      name: formData.get('name') as string,
-      email: email,
-      phone: formData.get('phone') as string,
-      location: formData.get('location') as string || '',
-      role: formData.get('role') as string || '',
-      area: formData.get('area') as string,
-      summary: candSummary,
-      skills: candSkills,
-      image: candImage,
-      cv_url: candResumes.length > 0 ? JSON.stringify(candResumes) : '',
-      status: 'active',
-      published_at: publication.published_at,
-      expires_at: publication.expires_at,
-    };
+    const uploaded: StorageObjectRef[] = [];
+    try {
+      let imageValue = GRAVATAR_PLACEHOLDER;
+      if (candImageFile) {
+        const photoRef = await uploadPublicImage({
+          category: UPLOAD_CATEGORY_IDS.talentPhoto,
+          file: candImageFile,
+          originalName: candImageFile.name,
+        });
+        uploaded.push(photoRef);
+        imageValue = photoRef.publicUrl || photoRef.path;
+      }
 
-    const { data, error } = await supabase
-      .from('talentos')
-      .insert([candData])
-      .select(TALENT_LIST_FIELDS)
-      .single();
+      const resumeItems: { name: string; url: string }[] = [];
+      for (const resume of candResumes) {
+        if (resume.file) {
+          const docRef = await uploadToStorage({
+            category: UPLOAD_CATEGORY_IDS.talentCv,
+            file: resume.file,
+            originalName: resume.name,
+          });
+          uploaded.push(docRef);
+          resumeItems.push({ name: resume.name, url: docRef.path });
+        } else if (resume.url) {
+          resumeItems.push({ name: resume.name, url: resume.url });
+        }
+      }
+
+      const candData = {
+        name: formData.get('name') as string,
+        email: email,
+        phone: formData.get('phone') as string,
+        location: formData.get('location') as string || '',
+        role: formData.get('role') as string || '',
+        area: formData.get('area') as string,
+        summary: candSummary,
+        skills: candSkills,
+        image: imageValue,
+        cv_url: resumeItems.length > 0 ? JSON.stringify(resumeItems) : '',
+        status: 'active',
+        published_at: publication.published_at,
+        expires_at: publication.expires_at,
+      };
+
+      const { data, error } = await supabase
+        .from('talentos')
+        .insert([candData])
+        .select(TALENT_LIST_FIELDS)
+        .single();
 
     if (data && !error) {
       if (activeView === 'galeria') {
@@ -1758,8 +1783,8 @@ export default function Dashboard() {
       setIsAddingCandidate(false);
       triggerToast('Currículo cadastrado com sucesso!', 'success');
       
-      // Reset form states
-      setCandImage('https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y');
+      setCandImage(GRAVATAR_PLACEHOLDER);
+      setCandImageFile(null);
       setCandSkills([]);
       setCandResumes([]);
       setCandSummary('');
@@ -1770,46 +1795,63 @@ export default function Dashboard() {
       };
       await supabase.from('history').insert(historyEntry);
       
-      // reload history
       const { data: hData } = await supabase.from('history').select('*').order('created_at', { ascending: false }).limit(20);
       if (hData) setHistory(hData);
     } else if (error) {
+      await removeUploaded(uploaded);
       triggerToast(`Erro ao cadastrar currículo: ${error.message}`, 'error');
+    }
+    } catch (error: unknown) {
+      await removeUploaded(uploaded);
+      const message = error instanceof Error ? error.message : 'Erro ao cadastrar currículo.';
+      triggerToast(`Erro ao cadastrar currículo: ${message}`, 'error');
     }
   };
 
   // Business Registration Handlers
   const handleNegLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 3 * 1024 * 1024) {
-        setErrorModal({
-          isOpen: true,
-          title: 'Arquivo Grande Demais',
-          message: 'O arquivo excede o limite individual de 3MB.'
-        });
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNegLogoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    const mime = (file.type || '').toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(mime as (typeof IMAGE_MIME_TYPES)[number])) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo não permitido',
+        message: 'Envie uma logo em JPEG, PNG, WebP ou GIF.',
+      });
+      return;
     }
+    if (file.size > UPLOAD_LIMITS.logoImageBytes) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo Grande Demais',
+        message: 'A logo deve ter no máximo 5MB.',
+      });
+      return;
+    }
+    if (negLogoUrl.startsWith('blob:')) URL.revokeObjectURL(negLogoUrl);
+    setNegLogoFile(file);
+    setNegLogoUrl(URL.createObjectURL(file));
   };
 
   const handleNegAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const newList = [...negAttachments];
-      let currentTotalSize = negAttachments.reduce((acc, a) => {
-        const base64Str = a.url.split(',')[1] || '';
-        return acc + (base64Str.length * 0.75);
-      }, 0);
+      let currentTotalSize = negAttachments.reduce((acc, a) => acc + a.size, 0);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (file.size > 3 * 1024 * 1024) {
+        const mime = (file.type || '').toLowerCase();
+        if (!MIXED_ATTACHMENT_MIME_TYPES.includes(mime as (typeof MIXED_ATTACHMENT_MIME_TYPES)[number])) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo não permitido',
+            message: `O arquivo "${file.name}" precisa ser PDF, DOC, DOCX ou imagem.`,
+          });
+          continue;
+        }
+        if (file.size > UPLOAD_LIMITS.documentBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Arquivo Grande Demais',
@@ -1817,7 +1859,7 @@ export default function Dashboard() {
           });
           continue;
         }
-        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+        if (currentTotalSize + file.size > UPLOAD_LIMITS.documentsTotalBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Limite Combinado Excedido',
@@ -1826,14 +1868,7 @@ export default function Dashboard() {
           break;
         }
 
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        newList.push({ name: file.name, url: dataUrl });
+        newList.push({ name: file.name, size: file.size, file });
         currentTotalSize += file.size;
       }
       setNegAttachments(newList);
@@ -1860,37 +1895,65 @@ export default function Dashboard() {
     }
 
     const publication = getPublicationWindow();
-    const negoData = {
-      title: formData.get('title') as string,
-      owner_name: formData.get('owner_name') as string,
-      contact_name: formData.get('contact_name') as string,
-      contact_email: email || null,
-      contact_phone: formData.get('contact_phone') as string || null,
-      location: formData.get('location') as string || null,
-      link: formData.get('link') as string || null,
-      type: formData.get('type') as string || null,
-      area: formData.get('area') as string || null,
-      description: negDescription || null,
-      attachment_url: negAttachments.length > 0 ? JSON.stringify(negAttachments) : null,
-      logo_url: negLogoUrl || null,
-      status: 'active',
-      published_at: publication.published_at,
-      expires_at: publication.expires_at,
-    };
+    const uploaded: StorageObjectRef[] = [];
+    try {
+      let logoUrl: string | null = null;
+      if (negLogoFile) {
+        const logoRef = await uploadPublicImage({
+          category: UPLOAD_CATEGORY_IDS.businessLogo,
+          file: negLogoFile,
+          originalName: negLogoFile.name,
+        });
+        uploaded.push(logoRef);
+        logoUrl = logoRef.publicUrl || logoRef.path;
+      }
 
-    const { data, error } = await supabase
-      .from('negocios')
-      .insert([negoData])
-      .select()
-      .single();
+      const storedAttachments: { name: string; url: string }[] = [];
+      for (const attachment of negAttachments) {
+        if (attachment.file) {
+          const docRef = await uploadToStorage({
+            category: UPLOAD_CATEGORY_IDS.businessAttachment,
+            file: attachment.file,
+            originalName: attachment.name,
+          });
+          uploaded.push(docRef);
+          storedAttachments.push({ name: attachment.name, url: docRef.path });
+        } else if (attachment.url) {
+          storedAttachments.push({ name: attachment.name, url: attachment.url });
+        }
+      }
+
+      const negoData = {
+        title: formData.get('title') as string,
+        owner_name: formData.get('owner_name') as string,
+        contact_name: formData.get('contact_name') as string,
+        contact_email: email || null,
+        contact_phone: formData.get('contact_phone') as string || null,
+        location: formData.get('location') as string || null,
+        link: formData.get('link') as string || null,
+        type: formData.get('type') as string || null,
+        area: formData.get('area') as string || null,
+        description: negDescription || null,
+        attachment_url: storedAttachments.length > 0 ? JSON.stringify(storedAttachments) : null,
+        logo_url: logoUrl,
+        status: 'active',
+        published_at: publication.published_at,
+        expires_at: publication.expires_at,
+      };
+
+      const { data, error } = await supabase
+        .from('negocios')
+        .insert([negoData])
+        .select()
+        .single();
 
     if (data && !error) {
       setNegocios(prev => [data, ...prev]);
       setIsAddingNegocio(false);
       triggerToast('Negócio cadastrado com sucesso!', 'success');
       
-      // Reset form states
       setNegLogoUrl('');
+      setNegLogoFile(null);
       setNegAttachments([]);
       setNegDescription('');
       
@@ -1900,11 +1963,16 @@ export default function Dashboard() {
       };
       await supabase.from('history').insert(historyEntry);
       
-      // reload history
       const { data: hData } = await supabase.from('history').select('*').order('created_at', { ascending: false }).limit(20);
       if (hData) setHistory(hData);
     } else if (error) {
+      await removeUploaded(uploaded);
       triggerToast(`Erro ao cadastrar negócio: ${error.message}`, 'error');
+    }
+    } catch (error: unknown) {
+      await removeUploaded(uploaded);
+      const message = error instanceof Error ? error.message : 'Erro ao cadastrar negócio.';
+      triggerToast(`Erro ao cadastrar negócio: ${message}`, 'error');
     }
   };
 
@@ -2195,50 +2263,94 @@ export default function Dashboard() {
 
   const addNoticia = React.useCallback(async (newNoticia: Partial<Noticia>) => {
     const slug = (newNoticia.title || '').toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
-    const noticiaData = {
-      title: newNoticia.title || 'Nova Notícia',
-      slug: `${slug}-${Date.now()}`,
-      content: newNoticia.content || '',
-      excerpt: newNoticia.excerpt || '',
-      image_url: newNoticia.image_url || '',
-      author: newNoticia.author || 'Administrador',
-      category: newNoticia.category || 'Geral',
-      status: 'active',
-      published_at: new Date().toISOString()
-    };
+    const uploaded: StorageObjectRef[] = [];
+    try {
+      let imageUrl = newNoticia.image_url || '';
+      if (newsImageFile) {
+        const imageRef = await uploadPublicImage({
+          category: UPLOAD_CATEGORY_IDS.newsImage,
+          file: newsImageFile,
+          originalName: newsImageFile.name,
+        });
+        uploaded.push(imageRef);
+        imageUrl = imageRef.publicUrl || imageRef.path;
+      } else if (imageUrl.startsWith('blob:')) {
+        imageUrl = '';
+      }
 
-    const { data, error } = await supabase.from('noticias').insert(noticiaData).select().single();
-    if (data && !error) {
-      setNoticias(prev => [data, ...prev]);
-      setIsAddingNoticia(false);
-      const { data: hData } = await supabase.from('history').insert({
-        action: 'Notícia Criada',
-        details: `Notícia "${data.title}" foi postada.`
-      }).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      const noticiaData = {
+        title: newNoticia.title || 'Nova Notícia',
+        slug: `${slug}-${Date.now()}`,
+        content: newNoticia.content || '',
+        excerpt: newNoticia.excerpt || '',
+        image_url: imageUrl,
+        author: newNoticia.author || 'Administrador',
+        category: newNoticia.category || 'Geral',
+        status: 'active',
+        published_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase.from('noticias').insert(noticiaData).select().single();
+      if (error) throw error;
+      if (data) {
+        setNoticias(prev => [data, ...prev]);
+        setIsAddingNoticia(false);
+        setNewsImageFile(null);
+        const { data: hData } = await supabase.from('history').insert({
+          action: 'Notícia Criada',
+          details: `Notícia "${data.title}" foi postada.`
+        }).select().single();
+        if (hData) setHistory(prev => [hData, ...prev]);
+      }
+    } catch (error: unknown) {
+      await removeUploaded(uploaded);
+      const message = error instanceof Error ? error.message : 'Erro ao criar notícia.';
+      triggerToast(`Erro ao criar notícia: ${message}`, 'error');
     }
-  }, []);
+  }, [newsImageFile]);
 
   const updateNoticia = React.useCallback(async (updatedNoticia: Noticia) => {
-    const { data, error } = await supabase.from('noticias').update({
-      title: updatedNoticia.title,
-      content: updatedNoticia.content,
-      excerpt: updatedNoticia.excerpt,
-      image_url: updatedNoticia.image_url,
-      author: updatedNoticia.author,
-      category: updatedNoticia.category
-    }).eq('id', updatedNoticia.id).select().single();
+    const uploaded: StorageObjectRef[] = [];
+    try {
+      let imageUrl = updatedNoticia.image_url || '';
+      if (newsImageFile) {
+        const imageRef = await uploadPublicImage({
+          category: UPLOAD_CATEGORY_IDS.newsImage,
+          file: newsImageFile,
+          originalName: newsImageFile.name,
+        });
+        uploaded.push(imageRef);
+        imageUrl = imageRef.publicUrl || imageRef.path;
+      } else if (imageUrl.startsWith('blob:')) {
+        imageUrl = '';
+      }
 
-    if (data && !error) {
-      setNoticias(prev => prev.map(n => n.id === data.id ? data : n));
-      setEditingNoticia(null);
-      const { data: hData } = await supabase.from('history').insert({
-        action: 'Notícia Editada',
-        details: `Notícia "${data.title}" foi atualizada.`
-      }).select().single();
-      if (hData) setHistory(prev => [hData, ...prev]);
+      const { data, error } = await supabase.from('noticias').update({
+        title: updatedNoticia.title,
+        content: updatedNoticia.content,
+        excerpt: updatedNoticia.excerpt,
+        image_url: imageUrl,
+        author: updatedNoticia.author,
+        category: updatedNoticia.category
+      }).eq('id', updatedNoticia.id).select().single();
+
+      if (error) throw error;
+      if (data) {
+        setNoticias(prev => prev.map(n => n.id === data.id ? data : n));
+        setEditingNoticia(null);
+        setNewsImageFile(null);
+        const { data: hData } = await supabase.from('history').insert({
+          action: 'Notícia Editada',
+          details: `Notícia "${data.title}" foi atualizada.`
+        }).select().single();
+        if (hData) setHistory(prev => [hData, ...prev]);
+      }
+    } catch (error: unknown) {
+      await removeUploaded(uploaded);
+      const message = error instanceof Error ? error.message : 'Erro ao atualizar notícia.';
+      triggerToast(`Erro ao atualizar notícia: ${message}`, 'error');
     }
-  }, []);
+  }, [newsImageFile]);
 
   const deleteNoticia = React.useCallback(async (id: string | number) => {
     const noticia = noticias.find(n => n.id === id);
@@ -4085,10 +4197,14 @@ export default function Dashboard() {
                                     </div>
                                     <button 
                                       onClick={() => {
-                                        const link = document.createElement('a');
-                                        link.href = attachment.url;
-                                        link.download = attachment.name;
-                                        link.click();
+                                        void openStoredAttachment({
+                                          url: attachment.url,
+                                          name: attachment.name,
+                                          kind: SIGNED_FILE_KINDS.jobAttachment,
+                                          recordId: selectedJob.id,
+                                          index: idx,
+                                          useAdminSession: true,
+                                        }).catch(() => triggerToast('Não foi possível abrir o arquivo.', 'error'));
                                       }}
                                       className="p-2 bg-primary text-on-primary rounded-lg shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
                                     >
@@ -4237,20 +4353,13 @@ export default function Dashboard() {
                        {selectedCandidate.cv_url && (
                           <div className="space-y-2 mt-4">
                             <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Currículo(s) Anexo(s)</p>
-                            {parseAttachments(selectedCandidate.cv_url).map((attachment, idx) => (
-                              <a 
-                                key={idx}
-                                href={attachment.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between p-3 bg-primary/5 text-primary text-sm font-bold rounded-xl border border-primary/10 hover:bg-primary/10 transition-colors"
-                              >
-                                 <div className="flex items-center gap-2 truncate pr-2">
-                                   <FileText className="w-4 h-4 shrink-0" />
-                                   <span className="truncate">{attachment.name}</span>
-                                 </div>
-                              </a>
-                            ))}
+                            <FileAttachments
+                              value={selectedCandidate.cv_url}
+                              defaultName="Currículo"
+                              kind={SIGNED_FILE_KINDS.talentCv}
+                              recordId={selectedCandidate.id}
+                              useAdminSession
+                            />
                           </div>
                         )}
                         {false && (selectedCandidate as any)?.cv_url && (
@@ -4503,10 +4612,14 @@ export default function Dashboard() {
                                     </div>
                                     <button 
                                       onClick={() => {
-                                        const link = document.createElement('a');
-                                        link.href = attachment.url;
-                                        link.download = attachment.name;
-                                        link.click();
+                                        void openStoredAttachment({
+                                          url: attachment.url,
+                                          name: attachment.name,
+                                          kind: SIGNED_FILE_KINDS.businessAttachment,
+                                          recordId: selectedNegocio.id,
+                                          index: idx,
+                                          useAdminSession: true,
+                                        }).catch(() => triggerToast('Não foi possível abrir o arquivo.', 'error'));
                                       }}
                                       className="p-2 bg-orange-600 text-white rounded-lg shadow-lg shadow-orange-600/20 hover:scale-105 transition-transform"
                                     >
@@ -5128,7 +5241,10 @@ export default function Dashboard() {
                         <input 
                           type="text"
                           value={newsImageUrl}
-                          onChange={(e) => setNewsImageUrl(e.target.value)}
+                          onChange={(e) => {
+                            setNewsImageFile(null);
+                            setNewsImageUrl(e.target.value);
+                          }}
                           className="w-full p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
                           placeholder="Cole o link ou use o botão ->" 
                         />
@@ -5157,7 +5273,10 @@ export default function Dashboard() {
                         <img src={newsImageUrl} alt="Preview" className="w-full h-full object-cover" />
                         <button 
                           type="button"
-                          onClick={() => setNewsImageUrl('')}
+                          onClick={() => {
+                          setNewsImageFile(null);
+                          setNewsImageUrl('');
+                        }}
                           className="absolute top-2 right-2 p-1 bg-black/60 text-white rounded-full hover:bg-error transition-colors"
                         >
                           <X size={14} />
@@ -5304,7 +5423,10 @@ export default function Dashboard() {
                         <input 
                           type="text"
                           value={newsImageUrl}
-                          onChange={(e) => setNewsImageUrl(e.target.value)}
+                          onChange={(e) => {
+                            setNewsImageFile(null);
+                            setNewsImageUrl(e.target.value);
+                          }}
                           className="w-full p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" 
                         />
                       </div>
@@ -5327,7 +5449,10 @@ export default function Dashboard() {
                         <img src={newsImageUrl} alt="Preview" className="w-full h-full object-cover" />
                         <button 
                           type="button"
-                          onClick={() => setNewsImageUrl('')}
+                          onClick={() => {
+                          setNewsImageFile(null);
+                          setNewsImageUrl('');
+                        }}
                           className="absolute top-2 right-2 p-1 bg-black/60 text-white rounded-full hover:bg-error transition-colors"
                         >
                           <X size={14} />

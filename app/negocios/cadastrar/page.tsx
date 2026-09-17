@@ -31,6 +31,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { maskPhone } from '@/lib/utils';
 import { LEGAL_VERSION } from '@/lib/legal';
+import {
+  IMAGE_MIME_TYPES,
+  MIXED_ATTACHMENT_MIME_TYPES,
+  UPLOAD_CATEGORY_IDS,
+  UPLOAD_LIMITS,
+} from '@/lib/storage-config';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc } from '@/lib/media-src';
+import { removeUploaded, uploadPublicImage, uploadToStorage, type StorageObjectRef } from '@/lib/storage-upload';
 
 export default function CadastrarNegocioPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +64,8 @@ export default function CadastrarNegocioPage() {
     logo_url: ''
   });
   const [attachmentName, setAttachmentName] = useState('');
-  const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ name: string; size: number; file: File }[]>([]);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [consentError, setConsentError] = useState('');
@@ -84,29 +93,49 @@ export default function CadastrarNegocioPage() {
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, logo_url: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    const mime = (file.type || '').toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(mime as (typeof IMAGE_MIME_TYPES)[number])) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo não permitido',
+        message: 'Envie uma logo em JPEG, PNG, WebP ou GIF.',
+      });
+      return;
     }
+    if (file.size > UPLOAD_LIMITS.logoImageBytes) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo Grande Demais',
+        message: 'A logo deve ter no máximo 5MB.',
+      });
+      return;
+    }
+    if (formData.logo_url.startsWith('blob:')) {
+      URL.revokeObjectURL(formData.logo_url);
+    }
+    setLogoFile(file);
+    setFormData((prev) => ({ ...prev, logo_url: URL.createObjectURL(file) }));
   };
 
   const handleAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const newAttachmentsList = [...attachments];
-      
-      // Calcular o tamanho total dos arquivos já adicionados
-      let currentTotalSize = attachments.reduce((acc, a) => {
-        const base64Str = a.url.split(',')[1] || '';
-        return acc + (base64Str.length * 0.75);
-      }, 0);
+      let currentTotalSize = attachments.reduce((acc, a) => acc + a.size, 0);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (file.size > 3 * 1024 * 1024) {
+        const mime = (file.type || '').toLowerCase();
+        if (!MIXED_ATTACHMENT_MIME_TYPES.includes(mime as (typeof MIXED_ATTACHMENT_MIME_TYPES)[number])) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo não permitido',
+            message: `O arquivo "${file.name}" precisa ser PDF, DOC, DOCX ou imagem.`,
+          });
+          continue;
+        }
+        if (file.size > UPLOAD_LIMITS.documentBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Arquivo Grande Demais',
@@ -115,32 +144,26 @@ export default function CadastrarNegocioPage() {
           continue;
         }
 
-        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+        if (currentTotalSize + file.size > UPLOAD_LIMITS.documentsTotalBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Limite Combinado Excedido',
-            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB, para garantir que os arquivos sejam gravados de forma estável no banco de dados.`
+            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB.`
           });
           break;
         }
 
-        const fileDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
         newAttachmentsList.push({
           name: file.name,
-          url: fileDataUrl
+          size: file.size,
+          file,
         });
 
         currentTotalSize += file.size;
       }
 
       setAttachments(newAttachmentsList);
-      setFormData(prev => ({ ...prev, attachment_url: JSON.stringify(newAttachmentsList) }));
+      setFormData(prev => ({ ...prev, attachment_url: newAttachmentsList.length > 0 ? 'pending' : '' }));
 
       if (attachmentInputRef.current) {
         attachmentInputRef.current.value = '';
@@ -153,7 +176,7 @@ export default function CadastrarNegocioPage() {
     setAttachments(updated);
     setFormData(prev => ({
       ...prev,
-      attachment_url: updated.length > 0 ? JSON.stringify(updated) : ''
+      attachment_url: updated.length > 0 ? 'pending' : ''
     }));
   };
 
@@ -181,8 +204,31 @@ export default function CadastrarNegocioPage() {
   const handleFinalSubmit = async () => {
     setShowConfirmModal(false);
     setIsLoading(true);
+    const uploaded: StorageObjectRef[] = [];
 
     try {
+      let logoUrl: string | null = null;
+      if (logoFile) {
+        const logoRef = await uploadPublicImage({
+          category: UPLOAD_CATEGORY_IDS.businessLogo,
+          file: logoFile,
+          originalName: logoFile.name,
+        });
+        uploaded.push(logoRef);
+        logoUrl = logoRef.publicUrl || logoRef.path;
+      }
+
+      const storedAttachments: { name: string; url: string }[] = [];
+      for (const attachment of attachments) {
+        const docRef = await uploadToStorage({
+          category: UPLOAD_CATEGORY_IDS.businessAttachment,
+          file: attachment.file,
+          originalName: attachment.name,
+        });
+        uploaded.push(docRef);
+        storedAttachments.push({ name: attachment.name, url: docRef.path });
+      }
+
       const acceptedAt = new Date().toISOString();
       const { error } = await supabase
         .from('negocios')
@@ -197,8 +243,8 @@ export default function CadastrarNegocioPage() {
           type: formData.type || null,
           area: formData.area || null,
           description: formData.description || null,
-          attachment_url: formData.attachment_url || null,
-          logo_url: formData.logo_url || null,
+          attachment_url: storedAttachments.length > 0 ? JSON.stringify(storedAttachments) : null,
+          logo_url: logoUrl,
           status: 'pending',
           terms_accepted: true,
           terms_accepted_at: acceptedAt,
@@ -241,9 +287,10 @@ export default function CadastrarNegocioPage() {
 
       setIsSuccess(true);
     } catch (error: any) {
+      await removeUploaded(uploaded);
       console.error('Erro ao cadastrar negócio:', error);
       const msg = error.message || 'Erro desconhecido';
-      alert(`Erro no Supabase: ${msg}\n\nVerifique se o SQL foi executado corretamente.`);
+      alert(`Erro no envio: ${msg}`);
     } finally {
       setIsLoading(false);
     }
@@ -300,11 +347,12 @@ export default function CadastrarNegocioPage() {
                 >
                   {formData.logo_url ? (
                     <Image 
-                      src={formData.logo_url} 
+                      src={resolvePublicMediaSrc(formData.logo_url) || formData.logo_url} 
                       alt="Logo" 
                       fill
                       className="object-contain p-4"
                       referrerPolicy="no-referrer"
+                      unoptimized={needsUnoptimizedMedia(formData.logo_url) || formData.logo_url.startsWith('blob:')}
                     />
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-[#6f7881]">
@@ -328,6 +376,10 @@ export default function CadastrarNegocioPage() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (formData.logo_url.startsWith('blob:')) {
+                        URL.revokeObjectURL(formData.logo_url);
+                      }
+                      setLogoFile(null);
                       setFormData(prev => ({ ...prev, logo_url: '' }));
                     }}
                     className="absolute -bottom-2 -right-2 w-10 h-10 bg-red-100 shadow-xl rounded-full flex items-center justify-center text-red-600 hover:bg-red-200 active:scale-95 transition-all border border-red-200"

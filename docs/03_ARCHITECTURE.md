@@ -34,7 +34,8 @@ O projeto é uma aplicação web **monolítica** construída com **Next.js 15 (A
 │              Next.js API Routes (servidor)                       │
 │  /api/send-email  /api/send-campaign  /api/unsubscribe          │
 │  /api/track-visit /api/track-click                              │
-│  Também usam lib/supabase.ts e fetch para Resend                │
+│  /api/storage/upload  /api/storage/signed-url                   │
+│  Upload usa lib/supabase-admin.ts (service_role, só servidor)   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -46,7 +47,7 @@ O projeto é uma aplicação web **monolítica** construída com **Next.js 15 (A
 | Busca de dados | Feita no **navegador**, via cliente Supabase |
 | Autenticação admin | **Supabase Auth**, verificada no cliente (sem middleware Next.js) |
 | E-mail | Enviado por **API Routes** que chamam a API HTTP do Resend |
-| Arquivos (logos, CVs) | Salvos como **base64 em colunas de texto** no banco — sem Supabase Storage |
+| Arquivos (fotos, logos, CVs) | Novos envios passam por `/api/storage/upload` (Supabase Storage). Registros antigos em Base64 continuam válidos. |
 | Deploy | Build configurado como `output: 'standalone'` em `next.config.ts` |
 
 ---
@@ -78,7 +79,12 @@ Contém **tudo** que o Next.js serve: páginas públicas, painel admin, rotas de
 | Arquivo | Responsabilidade |
 |---|---|
 | `legal.ts` | Versão jurídica, janela de publicação (6 meses) e filtro público de expiração |
-| `supabase.ts` | Instancia e exporta o único cliente Supabase |
+| `supabase.ts` | Instancia e exporta o cliente Supabase anônimo (browser) |
+| `supabase-admin.ts` | Cliente service_role — somente servidor (`server-only`) |
+| `storage-config.ts` | Buckets, pastas, limites de seleção e categorias de upload |
+| `storage-categories.ts` | Whitelist servidor/cliente: bucket, pasta, MIME e limites por categoria |
+| `storage-upload.ts` | Upload via API Next.js, cleanup com deleteToken e signed URL no cliente |
+| `media-src.ts` | Compatibilidade Base64 / URL pública / path privado |
 | `utils.ts` | Funções utilitárias: `cn`, `maskPhone`, `maskCurrency`, `ensureExternalLink`, `stripHtml` |
 
 ### `hooks/`
@@ -171,7 +177,7 @@ Apenas **3 componentes** estão em `app/components/`. Vários helpers (ex.: `Can
 
 ## Estrutura do backend / API
 
-O "backend" do projeto são as **5 API Routes** do Next.js em `app/api/`. Não existe servidor separado, framework de API dedicado ou camada de serviços.
+O "backend" do projeto são as **API Routes** do Next.js em `app/api/`. Não existe servidor separado, framework de API dedicado ou camada de serviços.
 
 ```
 app/api/
@@ -179,7 +185,9 @@ app/api/
 ├── send-campaign/route.ts   POST — envia campanha de newsletter
 ├── unsubscribe/route.ts     GET  — descadastro/recadastro (retorna HTML)
 ├── track-visit/route.ts     POST — incrementa pageviews do dia
-└── track-click/route.ts     GET  — registra clique e redireciona
+├── track-click/route.ts     GET  — registra clique e redireciona
+├── storage/upload/route.ts  POST — upload server-side; DELETE — aborto com token
+└── storage/signed-url/route.ts POST — URL temporária de documento privado
 ```
 
 ### Detalhe de cada rota
@@ -191,14 +199,19 @@ app/api/
 | `GET /api/unsubscribe` | Query: `id` ou `email`, opcional `resubscribe=true` | Página HTML | Supabase (`newsletter_subscribers`) |
 | `POST /api/track-visit` | (sem body) | JSON `{ success }` | Supabase (`site_analytics`) |
 | `GET /api/track-click` | Query: `id`, `url` | Redirect 302 | Supabase (`newsletter_subscribers`) |
+| `POST /api/storage/upload` | `multipart`: `category`, `file` | JSON `{ bucket, path, publicUrl?, deleteToken? }` | Supabase Storage (service_role) |
+| `DELETE /api/storage/upload` | `{ deleteToken }` | JSON `{ ok }` | Supabase Storage (service_role) |
+| `POST /api/storage/signed-url` | `{ kind, recordId, index }` | JSON `{ url, expiresIn }` | PostgreSQL + Storage signed URL |
 
 ### Quem chama as API Routes
 
 | Chamador | Rotas usadas |
 |---|---|
-| Formulários de cadastro (`/vagas/cadastrar`, `/talentos/cadastrar`, etc.) | `/api/send-email` |
-| `app/contato/page.tsx` | `/api/send-email` |
+| Formulários de cadastro (`/vagas/cadastrar`, `/talentos/cadastrar`, etc.) | `/api/notify-admin`, `/api/storage/upload` |
+| `app/contato/page.tsx` | `/api/notify-admin` |
 | `app/admin/page.tsx` (moderação para publicação) | `/api/send-email` |
+| `app/admin/page.tsx` (notícias, talentos, negócios) | `/api/storage/upload` |
+| Listagens públicas e admin (anexos privados) | `/api/storage/signed-url` |
 | `app/admin/emails/page.tsx` | `/api/send-campaign` |
 | `app/components/AnalyticsTracker.tsx` | `/api/track-visit` |
 | Links em campanhas de e-mail | `/api/track-click`, `/api/unsubscribe` |

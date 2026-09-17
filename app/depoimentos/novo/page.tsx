@@ -21,12 +21,20 @@ import { supabase } from '@/lib/supabase';
 import { LEGAL_VERSION } from '@/lib/legal';
 import { useRouter } from 'next/navigation';
 import Cropper from 'react-easy-crop';
+import { canvasToOptimizedFile } from '@/lib/optimize-image';
+import {
+  IMAGE_MIME_TYPES,
+  UPLOAD_CATEGORY_IDS,
+  UPLOAD_LIMITS,
+} from '@/lib/storage-config';
+import { removeUploaded, uploadPublicImage, type StorageObjectRef } from '@/lib/storage-upload';
 
 export default function NewTestimonial() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string>('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [consentError, setConsentError] = useState('');
   
@@ -49,14 +57,15 @@ export default function NewTestimonial() {
       image.src = url;
     });
 
-  const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> => {
+  const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<File> => {
     const image = await createImage(imageSrc);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    if (!ctx) return '';
+    if (!ctx) {
+      throw new Error('Não foi possível recortar a imagem.');
+    }
 
-    // Set canvas size to a fixed size (e.g. 400x400) to optimize storage
     canvas.width = 400;
     canvas.height = 400;
 
@@ -75,14 +84,18 @@ export default function NewTestimonial() {
       400
     );
 
-    return canvas.toDataURL('image/jpeg', 0.8);
+    return canvasToOptimizedFile(canvas, 'depoimento.webp', 0.82);
   };
 
   const handleApplyCrop = async () => {
     if (imageToCrop && croppedAreaPixels) {
       try {
         const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
-        setPhotoUrl(croppedImage);
+        if (photoUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(photoUrl);
+        }
+        setPhotoFile(croppedImage);
+        setPhotoUrl(URL.createObjectURL(croppedImage));
         setImageToCrop(null);
       } catch (e) {
         console.error(e);
@@ -92,13 +105,21 @@ export default function NewTestimonial() {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageToCrop(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    const mime = (file.type || '').toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(mime as (typeof IMAGE_MIME_TYPES)[number])) {
+      alert('Envie uma imagem em JPEG, PNG, WebP ou GIF.');
+      return;
     }
+    if (file.size > UPLOAD_LIMITS.testimonialImageBytes) {
+      alert('A foto deve ter no máximo 5MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImageToCrop(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -111,26 +132,39 @@ export default function NewTestimonial() {
 
     setConsentError('');
     setIsSubmitting(true);
+    const uploaded: StorageObjectRef[] = [];
 
     const formData = new FormData(e.currentTarget);
     const acceptedAt = new Date().toISOString();
-    const testimonialData = {
-      name: formData.get('name') as string,
-      role: formData.get('role') as string,
-      company: formData.get('company') as string,
-      email: formData.get('email') as string || null,
-      content: formData.get('content') as string,
-      photo_url: photoUrl,
-      status: 'pending',
-      terms_accepted: true,
-      terms_accepted_at: acceptedAt,
-      terms_version: LEGAL_VERSION,
-      privacy_consent: true,
-      privacy_consent_at: acceptedAt,
-      privacy_policy_version: LEGAL_VERSION,
-    };
 
     try {
+      let storedPhoto = '';
+      if (photoFile) {
+        const photoRef = await uploadPublicImage({
+          category: UPLOAD_CATEGORY_IDS.testimonialPhoto,
+          file: photoFile,
+          originalName: photoFile.name,
+        });
+        uploaded.push(photoRef);
+        storedPhoto = photoRef.publicUrl || photoRef.path;
+      }
+
+      const testimonialData = {
+        name: formData.get('name') as string,
+        role: formData.get('role') as string,
+        company: formData.get('company') as string,
+        email: formData.get('email') as string || null,
+        content: formData.get('content') as string,
+        photo_url: storedPhoto,
+        status: 'pending',
+        terms_accepted: true,
+        terms_accepted_at: acceptedAt,
+        terms_version: LEGAL_VERSION,
+        privacy_consent: true,
+        privacy_consent_at: acceptedAt,
+        privacy_policy_version: LEGAL_VERSION,
+      };
+
       const { error } = await supabase
         .from('testimonials')
         .insert(testimonialData);
@@ -162,6 +196,7 @@ export default function NewTestimonial() {
         router.push('/');
       }, 5000);
     } catch (error: unknown) {
+      await removeUploaded(uploaded);
       const supabaseError = error as {
         message?: string;
         code?: string;

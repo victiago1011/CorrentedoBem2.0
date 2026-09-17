@@ -104,6 +104,8 @@ As principais variáveis atualmente utilizadas são:
 
 - NEXT_PUBLIC_SUPABASE_URL
 - NEXT_PUBLIC_SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY (somente servidor)
+- STORAGE_ABORT_SECRET (somente servidor; HMAC dos tokens de aborto de upload; mínimo 32 caracteres; não reutilizar outras chaves)
 - RESEND_API_KEY
 - GEMINI_API_KEY
 - APP_URL

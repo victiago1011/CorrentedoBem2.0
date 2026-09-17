@@ -74,9 +74,7 @@ export default function CadastrarVagaPage() {
       console.error('Erro ao cadastrar vaga:', error);
       const errorMsg =
         error.message || (typeof error === 'string' ? error : JSON.stringify(error));
-      alert(
-        `Erro ao cadastrar vaga: ${errorMsg}\n\nNota: Verifique se a tabela 'jobs' existe no seu Supabase e se as chaves API estão corretas no painel Settings.`
-      );
+      throw new Error(errorMsg);
     } finally {
       setIsLoading(false);
     }

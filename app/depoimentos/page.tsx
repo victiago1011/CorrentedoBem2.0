@@ -18,6 +18,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { Navbar } from '@/app/components/Navbar';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc } from '@/lib/media-src';
 
 interface Testimonial {
   id: string | number;
@@ -102,8 +103,8 @@ export default function TestimonialsPage() {
                 </p>
                 <div className="flex items-center gap-4 pt-6 border-t border-[#bec8d1]/10 mt-auto">
                   <div className="w-14 h-14 rounded-full overflow-hidden bg-[#f6f3f2] border-2 border-[#00628c]/10 shrink-0">
-                    {t.photo_url ? (
-                      <Image src={t.photo_url} alt={t.name} width={56} height={56} className="w-full h-full object-cover" />
+                    {t.photo_url && resolvePublicMediaSrc(t.photo_url) ? (
+                      <Image src={resolvePublicMediaSrc(t.photo_url)!} alt={t.name} width={56} height={56} className="w-full h-full object-cover" unoptimized={needsUnoptimizedMedia(t.photo_url)} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[#bec8d1]">
                         <User className="w-8 h-8" />

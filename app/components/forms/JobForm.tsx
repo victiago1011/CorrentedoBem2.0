@@ -21,6 +21,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { maskPhone, maskCurrency } from '@/lib/utils';
+import {
+  IMAGE_MIME_TYPES,
+  MIXED_ATTACHMENT_MIME_TYPES,
+  UPLOAD_CATEGORY_IDS,
+  UPLOAD_LIMITS,
+} from '@/lib/storage-config';
+import { estimateStoredFileBytes, needsUnoptimizedMedia, parseAttachments, resolvePublicMediaSrc } from '@/lib/media-src';
+import { removeUploaded, uploadPublicImage, uploadToStorage, type StorageObjectRef } from '@/lib/storage-upload';
 
 const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 
@@ -106,18 +114,15 @@ export default function JobForm({
   const [reqInput, setReqInput] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [consentError, setConsentError] = useState('');
-  const [attachments, setAttachments] = useState<{ name: string; url: string }[]>(() => {
+  const [attachments, setAttachments] = useState<{ name: string; url?: string; file?: File; size: number }[]>(() => {
     if (!initialValues?.attachment_url) return [];
-    try {
-      const parsed = JSON.parse(initialValues.attachment_url);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((item: { name?: string; url?: string }) => item?.url);
-      }
-    } catch {
-      // ignore invalid JSON
-    }
-    return [];
+    return parseAttachments(initialValues.attachment_url).map((item) => ({
+      name: item.name,
+      url: item.url,
+      size: estimateStoredFileBytes(item.url),
+    }));
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [errorModal, setErrorModal] = useState<{ isOpen: boolean; title: string; message: string }>({
     isOpen: false,
     title: '',
@@ -131,13 +136,29 @@ export default function JobForm({
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, logo_url: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    const mime = (file.type || '').toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(mime as (typeof IMAGE_MIME_TYPES)[number])) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo não permitido',
+        message: 'Envie uma logo em JPEG, PNG, WebP ou GIF.',
+      });
+      return;
     }
+    if (file.size > UPLOAD_LIMITS.logoImageBytes) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo Grande Demais',
+        message: 'A logo deve ter no máximo 5MB.',
+      });
+      return;
+    }
+    if (formData.logo_url.startsWith('blob:')) {
+      URL.revokeObjectURL(formData.logo_url);
+    }
+    setLogoFile(file);
+    setFormData((prev) => ({ ...prev, logo_url: URL.createObjectURL(file) }));
   };
 
   const addRequirement = () => {
@@ -162,14 +183,20 @@ export default function JobForm({
     if (files && files.length > 0) {
       const newAttachmentsList = [...attachments];
 
-      let currentTotalSize = attachments.reduce((acc, a) => {
-        const base64Str = a.url.split(',')[1] || '';
-        return acc + base64Str.length * 0.75;
-      }, 0);
+      let currentTotalSize = attachments.reduce((acc, a) => acc + a.size, 0);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (file.size > 3 * 1024 * 1024) {
+        const mime = (file.type || '').toLowerCase();
+        if (!MIXED_ATTACHMENT_MIME_TYPES.includes(mime as (typeof MIXED_ATTACHMENT_MIME_TYPES)[number])) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo não permitido',
+            message: `O arquivo "${file.name}" precisa ser PDF, DOC, DOCX ou imagem.`,
+          });
+          continue;
+        }
+        if (file.size > UPLOAD_LIMITS.documentBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Arquivo Grande Demais',
@@ -178,32 +205,29 @@ export default function JobForm({
           continue;
         }
 
-        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+        if (currentTotalSize + file.size > UPLOAD_LIMITS.documentsTotalBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Limite Combinado Excedido',
-            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB, para garantir que os arquivos sejam gravados de forma estável no banco de dados.`,
+            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB.`,
           });
           break;
         }
 
-        const fileDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
         newAttachmentsList.push({
           name: file.name,
-          url: fileDataUrl,
+          file,
+          size: file.size,
         });
 
         currentTotalSize += file.size;
       }
 
       setAttachments(newAttachmentsList);
-      setFormData((prev) => ({ ...prev, attachment_url: JSON.stringify(newAttachmentsList) }));
+      setFormData((prev) => ({
+        ...prev,
+        attachment_url: newAttachmentsList.length > 0 ? 'pending' : '',
+      }));
 
       if (attachmentInputRef.current) {
         attachmentInputRef.current.value = '';
@@ -216,7 +240,7 @@ export default function JobForm({
     setAttachments(updated);
     setFormData((prev) => ({
       ...prev,
-      attachment_url: updated.length > 0 ? JSON.stringify(updated) : '',
+      attachment_url: updated.length > 0 ? 'pending' : '',
     }));
   };
 
@@ -236,11 +260,50 @@ export default function JobForm({
       return;
     }
 
-    await onSubmit({
-      ...formData,
-      attachment_url:
-        attachments.length > 0 ? JSON.stringify(attachments) : formData.attachment_url,
-    });
+    const uploaded: StorageObjectRef[] = [];
+    try {
+      let logoUrl = formData.logo_url;
+      if (logoFile) {
+        const logoRef = await uploadPublicImage({
+          category: UPLOAD_CATEGORY_IDS.jobLogo,
+          file: logoFile,
+          originalName: logoFile.name,
+        });
+        uploaded.push(logoRef);
+        logoUrl = logoRef.publicUrl || logoRef.path;
+      } else if (logoUrl.startsWith('blob:')) {
+        logoUrl = '';
+      }
+
+      const storedAttachments: { name: string; url: string }[] = [];
+      for (const attachment of attachments) {
+        if (attachment.file) {
+          const docRef = await uploadToStorage({
+            category: UPLOAD_CATEGORY_IDS.jobAttachment,
+            file: attachment.file,
+            originalName: attachment.name,
+          });
+          uploaded.push(docRef);
+          storedAttachments.push({ name: attachment.name, url: docRef.path });
+        } else if (attachment.url) {
+          storedAttachments.push({ name: attachment.name, url: attachment.url });
+        }
+      }
+
+      await onSubmit({
+        ...formData,
+        logo_url: logoUrl,
+        attachment_url: storedAttachments.length > 0 ? JSON.stringify(storedAttachments) : '',
+      });
+    } catch (error: unknown) {
+      await removeUploaded(uploaded);
+      const message = error instanceof Error ? error.message : 'Não foi possível enviar os arquivos.';
+      setErrorModal({
+        isOpen: true,
+        title: 'Erro no envio',
+        message,
+      });
+    }
   };
 
   const formBody = (
@@ -256,11 +319,12 @@ export default function JobForm({
           >
             {formData.logo_url ? (
               <Image
-                src={formData.logo_url}
+                src={resolvePublicMediaSrc(formData.logo_url) || formData.logo_url}
                 alt="Logo"
                 fill
                 className="object-contain p-4"
                 referrerPolicy="no-referrer"
+                unoptimized={needsUnoptimizedMedia(formData.logo_url) || formData.logo_url.startsWith('blob:')}
               />
             ) : (
               <div className="flex flex-col items-center gap-2 text-[#6f7881]">
@@ -284,6 +348,10 @@ export default function JobForm({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                setLogoFile(null);
+                if (formData.logo_url.startsWith('blob:')) {
+                  URL.revokeObjectURL(formData.logo_url);
+                }
                 setFormData((prev) => ({ ...prev, logo_url: '' }));
               }}
               className="absolute -bottom-2 -right-2 w-10 h-10 bg-red-100 shadow-xl rounded-full flex items-center justify-center text-red-600 hover:bg-red-200 active:scale-95 transition-all border border-red-200"

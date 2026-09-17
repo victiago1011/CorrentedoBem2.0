@@ -32,31 +32,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
-import { publicUnexpiredOrFilter, isWithinPublicWindow } from '@/lib/legal';
-
-interface Attachment {
-  name: string;
-  url: string;
-}
-
-const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'Anexo'): Attachment[] => {
-  if (!urlOrJson) return [];
-  try {
-    const trimmed = urlOrJson.trim();
-    if (trimmed.startsWith('[')) {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item: any) => ({
-          name: item.name || defaultName,
-          url: item.url || item.data || ''
-        })).filter(item => item.url);
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-  return [{ name: defaultName, url: urlOrJson }];
-};
+import { publicUnexpiredOrFilter } from '@/lib/legal';
+import { FileAttachments } from '@/app/components/FileAttachments';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc, sanitizeIlikeTerm } from '@/lib/media-src';
 
 interface Negocio {
   id: string;
@@ -66,8 +44,8 @@ interface Negocio {
   area: string;
   description: string;
   link?: string;
-  contact_email: string;
-  contact_phone: string;
+  contact_email?: string;
+  contact_phone?: string;
   type: string;
   logo_url?: string;
   attachment_url?: string;
@@ -75,6 +53,9 @@ interface Negocio {
   created_at?: string;
   expires_at?: string | null;
 }
+
+const NEGOCIO_LIST_FIELDS = 'id, title, owner_name, location, area, description, type, logo_url, status, created_at, expires_at';
+const NEGOCIO_DETAIL_FIELDS = 'id, title, owner_name, location, area, description, link, contact_email, contact_phone, type, logo_url, attachment_url, status, created_at, expires_at';
 
 function NegociosContent() {
   const searchParams = useSearchParams();
@@ -84,6 +65,7 @@ function NegociosContent() {
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [isFiltersVisible, setIsFiltersVisible] = useState(false);
   const [selectedNegocio, setSelectedNegocio] = useState<Negocio | null>(null);
   const itemsPerPage = 6;
@@ -109,21 +91,46 @@ function NegociosContent() {
   useEffect(() => {
     async function fetchNegocios() {
       setIsLoading(true);
-      const { data, error } = await supabase
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      const term = sanitizeIlikeTerm(searchTerm);
+
+      let query = supabase
         .from('negocios')
-        .select('id, title, owner_name, location, area, description, link, contact_email, contact_phone, type, logo_url, attachment_url, status, created_at, expires_at')
+        .select(NEGOCIO_LIST_FIELDS, { count: 'exact' })
         .eq('status', 'active')
         .or(publicUnexpiredOrFilter())
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (selectedCategory !== 'Todas') {
+        query = query.ilike('area', selectedCategory);
+      }
+
+      if (selectedTypes.length > 0) {
+        const typeFilter = selectedTypes
+          .map((t) => `type.ilike.%${sanitizeIlikeTerm(t)}%`)
+          .filter(Boolean)
+          .join(',');
+        if (typeFilter) query = query.or(typeFilter);
+      }
+
+      if (term) {
+        query = query.or(`title.ilike.%${term}%,owner_name.ilike.%${term}%`);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error('Erro ao buscar negócios:', error);
       }
-      if (data) setNegocios(data.filter((item) => isWithinPublicWindow(item.expires_at)));
+      setNegocios(data || []);
+      setTotalCount(count || 0);
       setIsLoading(false);
     }
-    fetchNegocios();
-  }, []);
+    const timer = setTimeout(fetchNegocios, searchTerm ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [currentPage, searchTerm, selectedCategory, selectedTypes]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
@@ -131,21 +138,24 @@ function NegociosContent() {
     );
   };
 
-  const filteredNegocios = negocios.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          item.owner_name.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const itemArea = item.area?.trim().toLowerCase() || '';
-    const selectedCat = selectedCategory.trim().toLowerCase();
-    const matchesCategory = selectedCategory === 'Todas' || itemArea === selectedCat;
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
+  const paginatedNegocios = negocios;
 
-    const matchesType = selectedTypes.length === 0 || selectedTypes.some(t => item.type && item.type.includes(t));
-
-    return matchesSearch && matchesCategory && matchesType;
-  });
-
-  const totalPages = Math.ceil(filteredNegocios.length / itemsPerPage);
-  const paginatedNegocios = filteredNegocios.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const openNegocioDetail = async (item: Negocio) => {
+    setSelectedNegocio(item);
+    const { data, error } = await supabase
+      .from('negocios')
+      .select(NEGOCIO_DETAIL_FIELDS)
+      .eq('id', item.id)
+      .eq('status', 'active')
+      .or(publicUnexpiredOrFilter())
+      .maybeSingle();
+    if (error) {
+      console.error('Erro ao carregar negócio:', error);
+      return;
+    }
+    if (data) setSelectedNegocio(data);
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -286,7 +296,7 @@ function NegociosContent() {
           {/* Business Grid */}
           <div className="flex-1">
             <div className="flex justify-between items-center mb-8">
-              <span className="text-sm font-bold text-[#3e4850]">{filteredNegocios.length} Oportunidades encontradas</span>
+              <span className="text-sm font-bold text-[#3e4850]">{totalCount} Oportunidades encontradas</span>
             </div>
 
             {isLoading ? (
@@ -306,7 +316,7 @@ function NegociosContent() {
                     <div className="flex justify-between items-start mb-6">
                       <div className="w-14 h-14 bg-[#f6f3f2] rounded-2xl flex items-center justify-center text-[#00628c] group-hover:bg-[#00628c] group-hover:text-white transition-colors relative overflow-hidden">
                         {item.logo_url ? (
-                          <Image src={item.logo_url} alt={item.owner_name} fill className="object-contain p-2" referrerPolicy="no-referrer" />
+                          <Image src={resolvePublicMediaSrc(item.logo_url) || item.logo_url} alt={item.owner_name} fill className="object-contain p-2" referrerPolicy="no-referrer" unoptimized={needsUnoptimizedMedia(item.logo_url)} />
                         ) : (
                           <TrendingUp className="w-7 h-7" />
                         )}
@@ -328,7 +338,7 @@ function NegociosContent() {
                       {stripHtml(item.description)}
                     </p>
                     <button 
-                      onClick={() => setSelectedNegocio(item)}
+                      onClick={() => openNegocioDetail(item)}
                       className="w-full py-3.5 bg-[#f6f3f2] hover:bg-[#00628c] hover:text-white text-[#00628c] font-bold rounded-2xl transition-all active:scale-95 text-center"
                     >
                       Ver Detalhes
@@ -413,7 +423,7 @@ function NegociosContent() {
                 <div className="flex items-center gap-4 mb-8">
                   <div className="w-16 h-16 bg-[#c8e6ff] rounded-2xl flex items-center justify-center text-[#00628c] relative overflow-hidden">
                     {selectedNegocio.logo_url ? (
-                      <Image src={selectedNegocio.logo_url} alt={selectedNegocio.owner_name} fill className="object-contain p-2" referrerPolicy="no-referrer" />
+                      <Image src={resolvePublicMediaSrc(selectedNegocio.logo_url) || selectedNegocio.logo_url} alt={selectedNegocio.owner_name} fill className="object-contain p-2" referrerPolicy="no-referrer" unoptimized={needsUnoptimizedMedia(selectedNegocio.logo_url)} />
                     ) : (
                       <TrendingUp className="w-8 h-8" />
                     )}
@@ -471,28 +481,7 @@ function NegociosContent() {
                     {selectedNegocio.attachment_url && (
                       <div className="pt-4 border-t border-[#bec8d1]/20">
                         <h4 className="text-xs font-black uppercase tracking-widest text-[#6f7881] mb-2">Anexo(s) / Arquivo(s)</h4>
-                        <div className="space-y-3">
-                          {parseAttachments(selectedNegocio.attachment_url).map((attachment, index) => (
-                            <a 
-                              key={index}
-                              href={attachment.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              download={attachment.name}
-                              className="flex items-center gap-3 p-4 bg-[#f6f3f2] rounded-2xl hover:bg-[#c8e6ff]/20 transition-all border border-transparent hover:border-[#00628c]/10"
-                            >
-                              <div className="w-10 h-10 rounded-xl bg-[#c8e6ff] flex items-center justify-center text-[#00628c]">
-                                <Paperclip className="w-5 h-5" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-black text-[#00628c] uppercase tracking-wider truncate" title={attachment.name}>
-                                  {attachment.name}
-                                </p>
-                                <p className="text-[10px] text-[#6f7881]">Clique para baixar o arquivo anexado</p>
-                              </div>
-                            </a>
-                          ))}
-                        </div>
+                        <FileAttachments value={selectedNegocio.attachment_url} compact kind="business-attachment" recordId={selectedNegocio.id} />
                       </div>
                     )}
                   </div>

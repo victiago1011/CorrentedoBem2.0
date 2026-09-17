@@ -87,6 +87,7 @@ Responsável por:
 - Banco PostgreSQL
 - Supabase Auth
 - APIs do banco
+- Storage (`public-media` público e `private-documents` privado)
 
 Documentação relacionada:
 
@@ -99,7 +100,11 @@ Variáveis utilizadas:
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY   (somente servidor)
+STORAGE_ABORT_SECRET        (somente servidor)
 ```
+
+Uploads públicos e administrativos passam por `/api/storage/upload`. Documentos privados são lidos por signed URL em `/api/storage/signed-url` (120 segundos), após conferir o registro no banco.
 
 ---
 

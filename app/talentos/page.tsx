@@ -40,14 +40,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
-import { publicUnexpiredOrFilter, isWithinPublicWindow } from '@/lib/legal';
+import { FileAttachments } from '@/app/components/FileAttachments';
+import { publicUnexpiredOrFilter } from '@/lib/legal';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc, sanitizeIlikeTerm } from '@/lib/media-src';
 
 // Helper component for candidate images with error fallback
 const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: string; name: string; className?: string }) => {
   const [error, setError] = React.useState(false);
-  const isFallback = !src || src.includes('gravatar') || src.includes('dicebear');
-  
-  if (error || !src) {
+  const mediaSrc = resolvePublicMediaSrc(src) || src;
+  if (error || !mediaSrc) {
     return (
       <div className="w-full h-full bg-[#f6f3f2] flex items-center justify-center text-[#bec8d1] border border-[#bec8d1]/20">
         <User className="w-1/2 h-1/2" />
@@ -57,46 +58,25 @@ const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: stri
 
   return (
     <Image 
-      src={src} 
+      src={mediaSrc} 
       alt={name} 
       fill 
       className={className} 
       referrerPolicy="no-referrer"
-      unoptimized={src.includes('dicebear')}
+      unoptimized={needsUnoptimizedMedia(src)}
       onError={() => setError(true)}
     />
   );
 };
 
-interface Attachment {
-  name: string;
-  url: string;
-}
-
-const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'Currículo'): Attachment[] => {
-  if (!urlOrJson) return [];
-  try {
-    const trimmed = urlOrJson.trim();
-    if (trimmed.startsWith('[')) {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item: any) => ({
-          name: item.name || defaultName,
-          url: item.url || item.data || ''
-        })).filter(item => item.url);
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-  return [{ name: defaultName, url: urlOrJson }];
-};
+const TALENT_LIST_FIELDS = 'id, name, location, area, status, role, summary, skills, image, verified, created_at, expires_at';
+const TALENT_DETAIL_FIELDS = 'id, name, email, phone, location, area, status, role, summary, skills, image, cv_url, verified, created_at, expires_at';
 
 interface Candidate {
   id: string;
   name: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   location: string;
   area: string;
   status: 'pending' | 'active' | 'rejected';
@@ -117,6 +97,7 @@ function TalentosContent() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'Todos os Talentos');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [isFiltersVisible, setIsFiltersVisible] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
@@ -140,12 +121,27 @@ function TalentosContent() {
   useEffect(() => {
     async function fetchCandidates() {
       setIsLoading(true);
-      const { data, error } = await supabase
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      const term = sanitizeIlikeTerm(searchTerm);
+
+      let query = supabase
         .from('talentos')
-        .select('id, name, email, phone, location, area, status, role, summary, skills, image, cv_url, verified, created_at, expires_at')
+        .select(TALENT_LIST_FIELDS, { count: 'exact' })
         .eq('status', 'active')
         .or(publicUnexpiredOrFilter())
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (selectedCategory !== 'Todos os Talentos') {
+        query = query.eq('area', selectedCategory);
+      }
+
+      if (term) {
+        query = query.or(`name.ilike.%${term}%,role.ilike.%${term}%,summary.ilike.%${term}%,skills.cs.{"${term}"}`);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error('Erro ao buscar candidatos:', {
@@ -154,24 +150,41 @@ function TalentosContent() {
           details: error.details
         });
       }
-      if (data) setCandidates(data.filter((item) => isWithinPublicWindow(item.expires_at)));
+      setCandidates((data || []).map((item) => ({
+        ...item,
+        skills: Array.isArray(item.skills) ? item.skills : [],
+      })));
+      setTotalCount(count || 0);
       setIsLoading(false);
     }
-    fetchCandidates();
-  }, []);
+    const timer = setTimeout(fetchCandidates, searchTerm ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [currentPage, searchTerm, selectedCategory]);
 
-  const filteredCandidates = React.useMemo(() => {
-    return candidates.filter(cand => {
-      const matchesSearch = cand.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            cand.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            cand.skills.some(s => s.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesCategory = selectedCategory === 'Todos os Talentos' || cand.area === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [candidates, searchTerm, selectedCategory]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
+  const paginatedCandidates = candidates;
 
-  const totalPages = Math.ceil(filteredCandidates.length / itemsPerPage);
-  const paginatedCandidates = filteredCandidates.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const openCandidateDetail = async (candidate: Candidate) => {
+    setSelectedCandidate(candidate);
+    const { data, error } = await supabase
+      .from('talentos')
+      .select(TALENT_DETAIL_FIELDS)
+      .eq('id', candidate.id)
+      .eq('status', 'active')
+      .or(publicUnexpiredOrFilter())
+      .maybeSingle();
+
+    if (error) {
+      console.error('Erro ao carregar perfil do talento:', error);
+      return;
+    }
+    if (data) {
+      setSelectedCandidate({
+        ...data,
+        skills: Array.isArray(data.skills) ? data.skills : [],
+      });
+    }
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -324,7 +337,7 @@ function TalentosContent() {
                           {cand.location}
                         </div>
                         <button 
-                          onClick={() => setSelectedCandidate(cand)}
+                          onClick={() => openCandidateDetail(cand)}
                           className="text-[#00628c] font-black text-sm hover:underline flex items-center gap-2"
                         >
                           Ver Perfil Completo <ExternalLink className="w-4 h-4" />
@@ -476,28 +489,7 @@ function TalentosContent() {
                   {selectedCandidate.cv_url && (
                     <div className="pt-6 border-t border-[#f6f3f2]">
                       <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#00628c] mb-4">Currículo(s) Anexo(s)</h3>
-                      <div className="space-y-3">
-                        {parseAttachments(selectedCandidate.cv_url).map((attachment, index) => (
-                          <a 
-                            key={index}
-                            href={attachment.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            download={attachment.name}
-                            className="flex items-center gap-4 p-4 bg-[#f6f3f2] rounded-2xl hover:bg-[#c8e6ff]/20 transition-all border border-transparent hover:border-[#00628c]/10"
-                          >
-                            <div className="w-12 h-12 rounded-xl bg-[#c8e6ff] flex items-center justify-center text-[#00628c]">
-                              <Paperclip className="w-6 h-6" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-black text-[#00628c] uppercase tracking-wider truncate" title={attachment.name}>
-                                {attachment.name}
-                              </p>
-                              <p className="text-[10px] text-[#6f7881]">Clique para baixar o arquivo anexado</p>
-                            </div>
-                          </a>
-                        ))}
-                      </div>
+                      <FileAttachments value={selectedCandidate.cv_url} defaultName="Currículo" kind="talent-cv" recordId={selectedCandidate.id} />
                     </div>
                   )}
 
@@ -515,7 +507,7 @@ function TalentosContent() {
                       </div>
                       <div className="space-y-2 min-w-0">
                         <p className="text-[10px] uppercase font-black opacity-50 tracking-widest">Telefone / WhatsApp</p>
-                        <a href={`https://wa.me/${selectedCandidate.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm sm:text-base md:text-lg font-bold hover:underline flex items-center gap-3 break-all">
+                        <a href={`https://wa.me/${selectedCandidate.phone?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm sm:text-base md:text-lg font-bold hover:underline flex items-center gap-3 break-all">
                           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
                             <Phone className="w-5 h-5 text-white" />
                           </div>

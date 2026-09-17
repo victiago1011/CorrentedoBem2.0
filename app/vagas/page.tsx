@@ -36,30 +36,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
-
-interface Attachment {
-  name: string;
-  url: string;
-}
-
-const parseAttachments = (urlOrJson: string | null | undefined, defaultName = 'Anexo'): Attachment[] => {
-  if (!urlOrJson) return [];
-  try {
-    const trimmed = urlOrJson.trim();
-    if (trimmed.startsWith('[')) {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item: any) => ({
-          name: item.name || defaultName,
-          url: item.url || item.data || ''
-        })).filter(item => item.url);
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-  return [{ name: defaultName, url: urlOrJson }];
-};
+import { FileAttachments } from '@/app/components/FileAttachments';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc, sanitizeIlikeTerm } from '@/lib/media-src';
 
 interface Job {
   id: string;
@@ -69,17 +47,22 @@ interface Job {
   type: string;
   area: string;
   status: 'pending' | 'active' | 'rejected' | 'closed';
-  salary: string;
-  description: string;
-  requirements: string[];
+  salary?: string;
+  description?: string;
+  requirements?: string[];
   logo_url?: string;
   site_url?: string;
   contact_email?: string;
   contact_phone?: string;
+  email?: string;
+  phone?: string;
   attachment_url?: string;
   verified?: boolean;
   created_at?: string;
 }
+
+const JOB_LIST_FIELDS = 'id, title, company, location, type, area, status, salary, logo_url, created_at, verified';
+const JOB_DETAIL_FIELDS = 'id, title, company, location, type, area, status, salary, description, requirements, logo_url, site_url, email, phone, attachment_url, created_at, verified';
 
 function VagasContent() {
   const searchParams = useSearchParams();
@@ -90,6 +73,7 @@ function VagasContent() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [isFiltersVisible, setIsFiltersVisible] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const itemsPerPage = 6;
@@ -109,11 +93,34 @@ function VagasContent() {
   useEffect(() => {
     async function fetchJobs() {
       setIsLoading(true);
-      const { data, error } = await supabase
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      const term = sanitizeIlikeTerm(searchTerm);
+
+      let query = supabase
         .from('vagas')
-        .select('id, title, company, location, type, area, status, salary, description, requirements, logo_url, site_url, email, phone, attachment_url, created_at, verified')
+        .select(JOB_LIST_FIELDS, { count: 'exact' })
         .eq('status', 'active')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (selectedCategory !== 'Todas') {
+        query = query.ilike('area', selectedCategory);
+      }
+
+      if (selectedTypes.length > 0) {
+        const typeFilter = selectedTypes
+          .map((t) => `type.ilike.%${sanitizeIlikeTerm(t)}%`)
+          .filter(Boolean)
+          .join(',');
+        if (typeFilter) query = query.or(typeFilter);
+      }
+
+      if (term) {
+        query = query.or(`title.ilike.%${term}%,company.ilike.%${term}%`);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error('Erro ao buscar vagas:', {
@@ -122,11 +129,13 @@ function VagasContent() {
           details: error.details
         });
       }
-      if (data) setJobs(data);
+      setJobs(data || []);
+      setTotalCount(count || 0);
       setIsLoading(false);
     }
-    fetchJobs();
-  }, []);
+    const timer = setTimeout(fetchJobs, searchTerm ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [currentPage, searchTerm, selectedCategory, selectedTypes]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
@@ -134,24 +143,23 @@ function VagasContent() {
     );
   };
 
-  const filteredJobs = React.useMemo(() => {
-    return jobs.filter(job => {
-      const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            job.company.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const jobArea = job.area?.trim().toLowerCase() || '';
-      const selectedCat = selectedCategory.trim().toLowerCase();
-      const matchesCategory = selectedCategory === 'Todas' || jobArea === selectedCat;
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
+  const paginatedJobs = jobs;
 
-      const matchesType = selectedTypes.length === 0 || selectedTypes.some(t => job.type.includes(t));
-      const matchesLevel = !selectedLevel || true; // Placeholder
-
-      return matchesSearch && matchesCategory && matchesType && matchesLevel;
-    });
-  }, [jobs, searchTerm, selectedCategory, selectedTypes, selectedLevel]);
-
-  const totalPages = Math.ceil(filteredJobs.length / itemsPerPage);
-  const paginatedJobs = filteredJobs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const openJobDetail = async (job: Job) => {
+    setSelectedJob(job);
+    const { data, error } = await supabase
+      .from('vagas')
+      .select(JOB_DETAIL_FIELDS)
+      .eq('id', job.id)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (error) {
+      console.error('Erro ao carregar vaga:', error);
+      return;
+    }
+    if (data) setSelectedJob(data);
+  };
 
   // Reset to page 1 when search or category changes
   useEffect(() => {
@@ -276,7 +284,7 @@ function VagasContent() {
           {/* Jobs Grid */}
           <div className="flex-1">
             <div className="flex justify-between items-center mb-8">
-              <span className="text-sm font-bold text-[#3e4850]">{filteredJobs.length} Vagas encontradas</span>
+              <span className="text-sm font-bold text-[#3e4850]">{totalCount} Vagas encontradas</span>
               <div className="flex items-center gap-2 text-sm text-[#6f7881]">
                 Ordenar por: 
                 <select className="bg-transparent border-none font-bold text-[#00628c] focus:ring-0 cursor-pointer">
@@ -303,7 +311,7 @@ function VagasContent() {
                     <div className="flex justify-between items-start mb-6">
                       <div className="w-14 h-14 bg-[#f6f3f2] rounded-2xl flex items-center justify-center text-[#00628c] group-hover:bg-[#00628c] group-hover:text-white transition-colors relative overflow-hidden">
                         {job.logo_url ? (
-                          <Image src={job.logo_url} alt={job.company} fill className="object-contain p-2" referrerPolicy="no-referrer" />
+                          <Image src={resolvePublicMediaSrc(job.logo_url) || job.logo_url} alt={job.company} fill className="object-contain p-2" referrerPolicy="no-referrer" unoptimized={needsUnoptimizedMedia(job.logo_url)} />
                         ) : (
                           <Briefcase className="w-7 h-7" />
                         )}
@@ -328,7 +336,7 @@ function VagasContent() {
                       </span>
                     </div>
                     <button 
-                      onClick={() => setSelectedJob(job)}
+                      onClick={() => openJobDetail(job)}
                       className="w-full py-3.5 bg-[#f6f3f2] hover:bg-[#00628c] hover:text-white text-[#00628c] font-bold rounded-2xl transition-all active:scale-95"
                     >
                       Ver Detalhes
@@ -434,7 +442,7 @@ function VagasContent() {
                 <div className="flex items-center gap-4 mb-8">
                   <div className="w-16 h-16 bg-[#c8e6ff] rounded-2xl flex items-center justify-center text-[#00628c] relative overflow-hidden">
                     {selectedJob.logo_url ? (
-                      <Image src={selectedJob.logo_url} alt={selectedJob.company} fill className="object-contain p-2" referrerPolicy="no-referrer" />
+                      <Image src={resolvePublicMediaSrc(selectedJob.logo_url) || selectedJob.logo_url} alt={selectedJob.company} fill className="object-contain p-2" referrerPolicy="no-referrer" unoptimized={needsUnoptimizedMedia(selectedJob.logo_url)} />
                     ) : (
                       <Briefcase className="w-8 h-8" />
                     )}
@@ -491,7 +499,7 @@ function VagasContent() {
                   <div>
                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#00628c] mb-4">Descrição da Vaga</h3>
                     <div 
-                      dangerouslySetInnerHTML={{ __html: selectedJob.description }} 
+                      dangerouslySetInnerHTML={{ __html: selectedJob.description || '' }} 
                       className="text-[#3e4850] leading-relaxed text-sm md:text-base rich-text-content prose prose-sm max-w-none"
                     />
                   </div>
@@ -513,28 +521,7 @@ function VagasContent() {
                   {selectedJob.attachment_url && (
                     <div className="pt-6 border-t border-[#f6f3f2]">
                       <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#00628c] mb-4">Anexo(s) / Arquivo(s)</h3>
-                      <div className="space-y-3">
-                        {parseAttachments(selectedJob.attachment_url).map((attachment, index) => (
-                          <a 
-                            key={index}
-                            href={attachment.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            download={attachment.name}
-                            className="flex items-center gap-3 p-4 bg-[#f6f3f2] rounded-2xl hover:bg-[#c8e6ff]/20 transition-all border border-transparent hover:border-[#00628c]/10"
-                          >
-                            <div className="w-10 h-10 rounded-xl bg-[#c8e6ff] flex items-center justify-center text-[#00628c]">
-                              <Paperclip className="w-5 h-5" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-black text-[#00628c] uppercase tracking-wider truncate" title={attachment.name}>
-                                {attachment.name}
-                              </p>
-                              <p className="text-[10px] text-[#6f7881]">Clique para baixar o arquivo anexado</p>
-                            </div>
-                          </a>
-                        ))}
-                      </div>
+                      <FileAttachments value={selectedJob.attachment_url} compact kind="job-attachment" recordId={selectedJob.id} />
                     </div>
                   )}
 

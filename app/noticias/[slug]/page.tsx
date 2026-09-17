@@ -29,6 +29,7 @@ import ReactMarkdown from 'react-markdown';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
 import { cn } from '@/lib/utils';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc } from '@/lib/media-src';
 
 interface Noticia {
   id: string;
@@ -47,7 +48,8 @@ interface Noticia {
 const SafeImage = ({ src, alt, className, fill, unoptimized, ...props }: any) => {
   const [error, setError] = useState(false);
   
-  if (error || !src) {
+  const mediaSrc = resolvePublicMediaSrc(src);
+  if (error || !mediaSrc) {
     return (
       <div className={cn(
         "bg-[#f0f2f5] flex items-center justify-center overflow-hidden",
@@ -63,10 +65,10 @@ const SafeImage = ({ src, alt, className, fill, unoptimized, ...props }: any) =>
   
   return (
     <Image
-      src={src}
+      src={mediaSrc}
       alt={alt}
       fill={fill}
-      unoptimized={unoptimized}
+      unoptimized={unoptimized || needsUnoptimizedMedia(src)}
       className={cn(className, "object-cover")}
       onError={() => setError(true)}
       {...props}

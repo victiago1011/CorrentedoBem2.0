@@ -11,6 +11,23 @@ const nextConfig: NextConfig = {
   // Allow access to remote image placeholder.
   images: {
     remotePatterns: [
+      ...(() => {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (!supabaseUrl) return [];
+        try {
+          const { hostname } = new URL(supabaseUrl);
+          return [
+            {
+              protocol: 'https' as const,
+              hostname,
+              port: '',
+              pathname: '/storage/v1/object/public/**',
+            },
+          ];
+        } catch {
+          return [];
+        }
+      })(),
       {
         protocol: 'https',
         hostname: 'picsum.photos',

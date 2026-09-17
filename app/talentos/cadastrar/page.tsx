@@ -28,6 +28,15 @@ import { LEGAL_VERSION } from '@/lib/legal';
 import Link from 'next/link';
 import Image from 'next/image';
 import { maskPhone } from '@/lib/utils';
+import {
+  DOCUMENT_MIME_TYPES,
+  GRAVATAR_PLACEHOLDER,
+  IMAGE_MIME_TYPES,
+  UPLOAD_CATEGORY_IDS,
+  UPLOAD_LIMITS,
+} from '@/lib/storage-config';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc } from '@/lib/media-src';
+import { removeUploaded, uploadPublicImage, uploadToStorage, type StorageObjectRef } from '@/lib/storage-upload';
 
 export default function CadastrarTalentoPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -47,12 +56,13 @@ export default function CadastrarTalentoPage() {
     role: '',
     summary: '',
     skills: [] as string[],
-    image: 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
+    image: GRAVATAR_PLACEHOLDER,
     resume_url: ''
   });
   const [skillInput, setSkillInput] = useState('');
   const [resumeName, setResumeName] = useState('');
-  const [resumes, setResumes] = useState<{ name: string; url: string }[]>([]);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [resumes, setResumes] = useState<{ name: string; size: number; file: File }[]>([]);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [consentError, setConsentError] = useState('');
@@ -97,30 +107,51 @@ export default function CadastrarTalentoPage() {
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, image: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const mime = (file.type || '').toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(mime as (typeof IMAGE_MIME_TYPES)[number])) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo não permitido',
+        message: 'Envie uma imagem em JPEG, PNG, WebP ou GIF.',
+      });
+      return;
     }
+    if (file.size > UPLOAD_LIMITS.profileImageBytes) {
+      setErrorModal({
+        isOpen: true,
+        title: 'Arquivo Grande Demais',
+        message: 'A foto deve ter no máximo 5MB.',
+      });
+      return;
+    }
+
+    if (formData.image.startsWith('blob:')) {
+      URL.revokeObjectURL(formData.image);
+    }
+    setPhotoFile(file);
+    setFormData((prev) => ({ ...prev, image: URL.createObjectURL(file) }));
   };
 
   const handleResumeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const newResumesList = [...resumes];
-      
-      // Calcular o tamanho total dos arquivos já adicionados
-      let currentTotalSize = resumes.reduce((acc, r) => {
-        const base64Str = r.url.split(',')[1] || '';
-        // Estimativa do tamanho original a partir do tamanho da string base64
-        return acc + (base64Str.length * 0.75);
-      }, 0);
+      let currentTotalSize = resumes.reduce((acc, r) => acc + r.size, 0);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (file.size > 3 * 1024 * 1024) {
+        const mime = (file.type || '').toLowerCase();
+        if (!DOCUMENT_MIME_TYPES.includes(mime as (typeof DOCUMENT_MIME_TYPES)[number])) {
+          setErrorModal({
+            isOpen: true,
+            title: 'Arquivo não permitido',
+            message: `O arquivo "${file.name}" precisa ser PDF, DOC ou DOCX.`,
+          });
+          continue;
+        }
+        if (file.size > UPLOAD_LIMITS.documentBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Arquivo Grande Demais',
@@ -129,32 +160,26 @@ export default function CadastrarTalentoPage() {
           continue;
         }
 
-        if (currentTotalSize + file.size > 5 * 1024 * 1024) {
+        if (currentTotalSize + file.size > UPLOAD_LIMITS.documentsTotalBytes) {
           setErrorModal({
             isOpen: true,
             title: 'Limite Combinado Excedido',
-            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB, para garantir que os arquivos sejam gravados de forma estável no banco de dados.`
+            message: `Não foi possível adicionar o arquivo "${file.name}". O limite combinado para todos os anexos juntos é de 5MB.`
           });
           break;
         }
 
-        const fileDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
         newResumesList.push({
           name: file.name,
-          url: fileDataUrl
+          size: file.size,
+          file,
         });
 
         currentTotalSize += file.size;
       }
 
       setResumes(newResumesList);
-      setFormData(prev => ({ ...prev, resume_url: JSON.stringify(newResumesList) }));
+      setFormData(prev => ({ ...prev, resume_url: newResumesList.length > 0 ? 'pending' : '' }));
 
       if (resumeInputRef.current) {
         resumeInputRef.current.value = '';
@@ -167,7 +192,7 @@ export default function CadastrarTalentoPage() {
     setResumes(updated);
     setFormData(prev => ({
       ...prev,
-      resume_url: updated.length > 0 ? JSON.stringify(updated) : ''
+      resume_url: updated.length > 0 ? 'pending' : ''
     }));
   };
 
@@ -193,13 +218,37 @@ export default function CadastrarTalentoPage() {
   const handleFinalSubmit = async () => {
     setShowConfirmModal(false);
     setIsLoading(true);
+    const uploaded: StorageObjectRef[] = [];
 
     try {
+      let imageValue = GRAVATAR_PLACEHOLDER;
+      if (photoFile) {
+        const photoRef = await uploadPublicImage({
+          category: UPLOAD_CATEGORY_IDS.talentPhoto,
+          file: photoFile,
+          originalName: photoFile.name,
+        });
+        uploaded.push(photoRef);
+        imageValue = photoRef.publicUrl || photoRef.path;
+      }
+
+      const resumeItems: { name: string; url: string }[] = [];
+      for (const resume of resumes) {
+        const docRef = await uploadToStorage({
+          category: UPLOAD_CATEGORY_IDS.talentCv,
+          file: resume.file,
+          originalName: resume.name,
+        });
+        uploaded.push(docRef);
+        resumeItems.push({ name: resume.name, url: docRef.path });
+      }
+
       const acceptedAt = new Date().toISOString();
-      const { resume_url, ...rest } = formData;
+      const { resume_url: _resumeUrl, image: _image, ...rest } = formData;
       const submissionData = {
         ...rest,
-        cv_url: resume_url,
+        image: imageValue,
+        cv_url: resumeItems.length > 0 ? JSON.stringify(resumeItems) : '',
         status: 'pending',
         terms_accepted: true,
         terms_accepted_at: acceptedAt,
@@ -209,9 +258,7 @@ export default function CadastrarTalentoPage() {
         privacy_policy_version: LEGAL_VERSION,
       };
 
-      console.log('Enviando dados:', submissionData);
-
-      const { error, data } = await supabase
+      const { error } = await supabase
         .from('talentos')
         .insert([submissionData])
         .select();
@@ -221,7 +268,6 @@ export default function CadastrarTalentoPage() {
         throw new Error(error.message);
       }
 
-      // Enviar notificação de e-mail ao administrador
       try {
         await fetch('/api/notify-admin', {
           method: 'POST',
@@ -243,8 +289,9 @@ export default function CadastrarTalentoPage() {
       
       setIsSuccess(true);
     } catch (error: any) {
+      await removeUploaded(uploaded);
       console.error('Erro ao cadastrar talento:', error);
-      alert(`Erro: ${error.message || 'Verifique sua conexão ou se houve um problema no banco de dados.'}`);
+      alert(`Erro: ${error.message || 'Verifique sua conexão ou se houve um problema no envio dos arquivos.'}`);
     } finally {
       setIsLoading(false);
     }
@@ -296,11 +343,12 @@ export default function CadastrarTalentoPage() {
                <div className="relative group">
                   <div className="w-32 h-32 rounded-[2.5rem] bg-[#f6f3f2] overflow-hidden border-2 border-dashed border-[#bec8d1] flex items-center justify-center group-hover:border-[#00628c] transition-colors relative shadow-inner text-white">
                     <Image 
-                      src={formData.image} 
+                      src={resolvePublicMediaSrc(formData.image) || formData.image} 
                       alt="Avatar" 
                       fill
                       className="object-cover"
                       referrerPolicy="no-referrer"
+                      unoptimized={needsUnoptimizedMedia(formData.image) || formData.image.startsWith('blob:')}
                     />
                     <div 
                       onClick={() => fileInputRef.current?.click()}
@@ -319,7 +367,13 @@ export default function CadastrarTalentoPage() {
                   {!formData.image.includes('gravatar') ? (
                     <button 
                       type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, image: 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y' }))}
+                      onClick={() => {
+                        if (formData.image.startsWith('blob:')) {
+                          URL.revokeObjectURL(formData.image);
+                        }
+                        setPhotoFile(null);
+                        setFormData(prev => ({ ...prev, image: GRAVATAR_PLACEHOLDER }));
+                      }}
                       className="absolute -bottom-2 -right-2 w-10 h-10 bg-red-100 shadow-xl rounded-full flex items-center justify-center text-red-600 hover:bg-red-200 active:scale-95 transition-all border border-red-200"
                       title="Remover foto"
                     >

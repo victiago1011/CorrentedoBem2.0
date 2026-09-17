@@ -22,9 +22,10 @@ import { supabase } from '@/lib/supabase';
 import { Navbar } from '@/app/components/Navbar';
 import { Footer } from '@/app/components/Footer';
 import { cn, stripHtml } from '@/lib/utils';
+import { needsUnoptimizedMedia, resolvePublicMediaSrc, sanitizeIlikeTerm } from '@/lib/media-src';
 
-const getNewsPreview = (content: string, excerpt?: string, maxLength = 150) => {
-  const baseText = excerpt && excerpt.trim() ? excerpt : content;
+const getNewsPreview = (content?: string, excerpt?: string, maxLength = 150) => {
+  const baseText = excerpt && excerpt.trim() ? excerpt : content || '';
   const cleanText = stripHtml(baseText);
   if (cleanText.length <= maxLength) return cleanText;
   return cleanText.substring(0, maxLength).trim() + '...';
@@ -34,7 +35,7 @@ interface Noticia {
   id: string;
   title: string;
   slug: string;
-  content: string;
+  content?: string;
   excerpt?: string;
   image_url?: string;
   author?: string;
@@ -46,7 +47,8 @@ interface Noticia {
 const SafeImage = ({ src, alt, className, fill, unoptimized, ...props }: any) => {
   const [error, setError] = useState(false);
   
-  if (error || !src) {
+  const mediaSrc = resolvePublicMediaSrc(src);
+  if (error || !mediaSrc) {
     return (
       <div className={cn(
         "bg-[#f0f2f5] flex items-center justify-center overflow-hidden",
@@ -62,10 +64,10 @@ const SafeImage = ({ src, alt, className, fill, unoptimized, ...props }: any) =>
   
   return (
     <Image
-      src={src}
+      src={mediaSrc}
       alt={alt}
       fill={fill}
-      unoptimized={unoptimized}
+      unoptimized={unoptimized || needsUnoptimizedMedia(src)}
       className={cn(className, "object-cover")}
       onError={() => setError(true)}
       {...props}
@@ -81,25 +83,28 @@ export default function NoticiasPage() {
   useEffect(() => {
     async function fetchNoticias() {
       // Use cached data if possible or just fetch once
-      const { data, error } = await supabase
+      const term = sanitizeIlikeTerm(searchTerm);
+      let query = supabase
         .from('noticias')
-        .select('id, title, slug, content, excerpt, image_url, author, category, status, published_at')
+        .select('id, title, slug, excerpt, image_url, author, category, status, published_at')
         .eq('status', 'active')
         .order('published_at', { ascending: false });
+
+      if (term) {
+        query = query.or(`title.ilike.%${term}%,category.ilike.%${term}%`);
+      }
+
+      const { data, error } = await query;
 
       if (data) setNoticias(data);
       setIsLoading(false);
     }
-    fetchNoticias();
-  }, []);
+    const timer = setTimeout(fetchNoticias, searchTerm ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-  const filteredNoticias = noticias.filter(n => 
-    n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (n.category && n.category.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const highlights = filteredNoticias.slice(0, 3);
-  const restOfNews = filteredNoticias.slice(3);
+  const highlights = noticias.slice(0, 3);
+  const restOfNews = noticias.slice(3);
 
   return (
     <div className="min-h-screen bg-white">
@@ -142,7 +147,7 @@ export default function NoticiasPage() {
             <div className="w-16 h-16 border-4 border-[#00628c]/10 border-t-[#00628c] rounded-full animate-spin mb-6"></div>
             <p className="text-[#00628c] font-black uppercase tracking-widest text-xs animate-pulse">Carregando conteúdo...</p>
           </div>
-        ) : filteredNoticias.length > 0 ? (
+        ) : noticias.length > 0 ? (
           <div className="space-y-12">
             
             {/* G1 Style Highlights */}
@@ -233,7 +238,7 @@ export default function NoticiasPage() {
 
             {/* Rest of News - G1 Style List */}
             <div className="space-y-8">
-              {(searchTerm ? filteredNoticias : restOfNews).map((news, index) => (
+              {(searchTerm ? noticias : restOfNews).map((news, index) => (
                 <motion.article 
                   key={news.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -278,7 +283,7 @@ export default function NoticiasPage() {
               ))}
             </div>
 
-            {filteredNoticias.length === 0 && !isLoading && (
+            {noticias.length === 0 && !isLoading && (
               <div className="text-center py-32 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
                 <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 text-gray-300 shadow-sm">
                   <Search className="w-10 h-10" />
