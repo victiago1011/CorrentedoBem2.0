@@ -35,7 +35,8 @@ O projeto é uma aplicação web **monolítica** construída com **Next.js 15 (A
 │  /api/send-email  /api/send-campaign  /api/unsubscribe          │
 │  /api/track-visit /api/track-click                              │
 │  /api/storage/upload  /api/storage/signed-url                   │
-│  Upload usa lib/supabase-admin.ts (service_role, só servidor)   │
+│  /api/admin/content                                             │
+│  Upload/cleanup usam lib/supabase-admin.ts (service_role)       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,6 +85,9 @@ Contém **tudo** que o Next.js serve: páginas públicas, painel admin, rotas de
 | `storage-config.ts` | Buckets, pastas, limites de seleção e categorias de upload |
 | `storage-categories.ts` | Whitelist servidor/cliente: bucket, pasta, MIME e limites por categoria |
 | `storage-upload.ts` | Upload via API Next.js, cleanup com deleteToken e signed URL no cliente |
+| `storage-object-ref.ts` | Parser seguro de URL/path do Storage e extração de refs por entidade |
+| `storage-cleanup.ts` | Remoção server-only de objetos já validados (`service_role`) |
+| `admin-content-api.ts` | Cliente do Admin para DELETE/PATCH em `/api/admin/content` |
 | `media-src.ts` | Compatibilidade Base64 / URL pública / path privado |
 | `utils.ts` | Funções utilitárias: `cn`, `maskPhone`, `maskCurrency`, `ensureExternalLink`, `stripHtml` |
 
@@ -187,7 +191,8 @@ app/api/
 ├── track-visit/route.ts     POST — incrementa pageviews do dia
 ├── track-click/route.ts     GET  — registra clique e redireciona
 ├── storage/upload/route.ts  POST — upload server-side; DELETE — aborto com token
-└── storage/signed-url/route.ts POST — URL temporária de documento privado
+├── storage/signed-url/route.ts POST — URL temporária de documento privado
+└── admin/content/route.ts   DELETE — exclusão de registro + cleanup; PATCH — notícia com nova imagem
 ```
 
 ### Detalhe de cada rota
@@ -202,6 +207,8 @@ app/api/
 | `POST /api/storage/upload` | `multipart`: `category`, `file` | JSON `{ bucket, path, publicUrl?, deleteToken? }` | Supabase Storage (service_role) |
 | `DELETE /api/storage/upload` | `{ deleteToken }` | JSON `{ ok }` | Supabase Storage (service_role) |
 | `POST /api/storage/signed-url` | `{ kind, recordId, index }` | JSON `{ url, expiresIn }` | PostgreSQL + Storage signed URL |
+| `DELETE /api/admin/content` | `{ type, id }` | JSON `{ deleted, cleanup }` | PostgreSQL + Storage (`service_role`) |
+| `PATCH /api/admin/content` | `{ type: 'noticia', id, title, content, excerpt, image_url, author, category }` | JSON `{ updated, cleanup, record }` | PostgreSQL + Storage (`service_role`) |
 
 ### Quem chama as API Routes
 
@@ -211,12 +218,13 @@ app/api/
 | `app/contato/page.tsx` | `/api/notify-admin` |
 | `app/admin/page.tsx` (moderação para publicação) | `/api/send-email` |
 | `app/admin/page.tsx` (notícias, talentos, negócios) | `/api/storage/upload` |
+| `app/admin/page.tsx` (exclusão e troca de imagem de notícia) | `/api/admin/content` |
 | Listagens públicas e admin (anexos privados) | `/api/storage/signed-url` |
 | `app/admin/emails/page.tsx` | `/api/send-campaign` |
 | `app/components/AnalyticsTracker.tsx` | `/api/track-visit` |
 | Links em campanhas de e-mail | `/api/track-click`, `/api/unsubscribe` |
 
-As API Routes **não possuem autenticação própria** — qualquer cliente que conheça a URL pode chamá-las.
+Parte das API Routes públicas (tracking, unsubscribe, notify-admin) **não exige login**. Rotas administrativas (`/api/send-email`, `/api/send-campaign`, `/api/newsletter-subscribers/search`, `/api/admin/content` e upload `news-image`) validam sessão via `requireAdmin`.
 
 ---
 
@@ -234,9 +242,8 @@ export const supabase = createClient(
 );
 ```
 
-- **Um único cliente** com a chave anon (pública)
-- Usado tanto no navegador (páginas) quanto no servidor (API Routes)
-- Não existe cliente com `service_role` no código
+- Cliente **anon** em `lib/supabase.ts` — navegador e rotas que não precisam de `service_role`
+- Cliente **service_role** em `lib/supabase-admin.ts` — somente servidor (`server-only`), usado em upload, signed URL e `/api/admin/content`
 
 ### Tabelas utilizadas pela aplicação
 
@@ -260,11 +267,15 @@ export const supabase = createClient(
 | Páginas públicas | `app/page.tsx`, `app/vagas/page.tsx`, `app/talentos/page.tsx`, `app/negocios/page.tsx`, `app/noticias/page.tsx`, `app/noticias/[slug]/page.tsx`, `app/depoimentos/page.tsx` |
 | Formulários de cadastro | `app/vagas/cadastrar/page.tsx`, `app/talentos/cadastrar/page.tsx`, `app/negocios/cadastrar/page.tsx`, `app/depoimentos/novo/page.tsx` |
 | Admin | `app/admin/page.tsx`, `app/admin/emails/page.tsx`, `app/admin/login/page.tsx` |
-| API Routes | `app/api/send-campaign/route.ts`, `app/api/unsubscribe/route.ts`, `app/api/track-visit/route.ts`, `app/api/track-click/route.ts` |
+| API Routes | `app/api/send-campaign/route.ts`, `app/api/unsubscribe/route.ts`, `app/api/track-visit/route.ts`, `app/api/track-click/route.ts`, `app/api/storage/upload/route.ts`, `app/api/storage/signed-url/route.ts`, `app/api/admin/content/route.ts` |
 
 ### Armazenamento de arquivos
 
-O projeto **não usa Supabase Storage**. Arquivos enviados pelos formulários (logos, fotos, CVs, anexos) são convertidos para **base64 data URL** no navegador via `FileReader` e salvos diretamente em colunas de texto (`logo_url`, `image`, `cv_url`, `attachment_url`, `photo_url`).
+Novos envios usam **Supabase Storage** (`public-media` e `private-documents`) via `/api/storage/upload`. Valores antigos em Base64 e URLs externas (ex.: Gravatar) continuam válidos na leitura.
+
+A exclusão administrativa de Talentos, Vagas, Negócios, Notícias e Depoimentos passa por `DELETE /api/admin/content`: o servidor lê o registro, apaga a linha no banco e, só então, remove objetos reconhecidos do Storage. Base64, Gravatar e URLs que não sejam do nosso Storage não são enviados a `storage.remove`. Não há varredura de órfãos.
+
+Quando o Admin troca a imagem de uma notícia, o UPDATE completo (texto + nova `image_url`) ocorre em `PATCH /api/admin/content`. Só após o UPDATE confirmado a imagem antiga válida é removida. Se o UPDATE falhar, o registro permanece e o arquivo novo usa o abort (`deleteToken`) já existente.
 
 ### Segurança no banco (RLS)
 
@@ -361,8 +372,8 @@ O projeto usa **Supabase Auth** exclusivamente para o painel administrativo. Vis
 ### O que o fluxo **não** possui
 
 - Sem **Next.js middleware** protegendo rotas `/admin/*`
-- Sem verificação de sessão nas **API Routes**
 - Sem roles ou permissões granulares — qualquer usuário autenticado no Supabase tem acesso total ao painel
+- Algumas API Routes usam `requireAdmin` (Bearer + `getUser`); outras permanecem públicas
 - Usuários admin são criados **manualmente** no painel do Supabase (Authentication → Users)
 
 ---

@@ -74,6 +74,7 @@ import {
 } from '@/lib/storage-config';
 import { needsUnoptimizedMedia, parseAttachments, resolvePublicMediaSrc } from '@/lib/media-src';
 import { openStoredAttachment, removeUploaded, uploadPublicImage, uploadToStorage, type StorageObjectRef } from '@/lib/storage-upload';
+import { adminCleanupToast, deleteAdminContent, updateAdminNoticiaWithImage } from '@/lib/admin-content-api';
 
 // Helper component for candidate images with error fallback
 const CandidateAvatar = ({ src, name, className = "object-cover" }: { src?: string; name: string; className?: string }) => {
@@ -1297,24 +1298,21 @@ export default function Dashboard() {
     const job = jobs.find(j => String(j.id) === String(id));
     if (!job) return;
 
-    const { error } = await supabase
-      .from('vagas')
-      .delete()
-      .eq('id', id);
-
-    if (!error) {
+    try {
+      const result = await deleteAdminContent('vaga', id);
       setJobs(prev => prev.filter(j => String(j.id) !== String(id)));
-      triggerToast('Vaga removida.');
-      
+      triggerToast(adminCleanupToast('Vaga removida.', result.cleanup));
+
       const historyEntry = {
         action: 'Vaga Removida',
         details: `Vaga "${job.title}" da empresa "${job.company}" foi removida manualmente.`
       };
-      
+
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
-    } else {
-      triggerToast(`Erro ao deletar: ${error.message}`, 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao deletar.';
+      triggerToast(`Erro ao deletar: ${message}`, 'error');
     }
   }, [jobs]);
 
@@ -1563,23 +1561,20 @@ export default function Dashboard() {
     const testimonial = testimonials.find(t => String(t.id) === String(id));
     if (!testimonial) return;
 
-    const { error } = await supabase
-      .from('testimonials')
-      .delete()
-      .eq('id', id);
-
-    if (!error) {
+    try {
+      const result = await deleteAdminContent('depoimento', id);
       setTestimonials(prev => prev.filter(t => String(t.id) !== String(id)));
-      triggerToast('Depoimento removido.');
-      
+      triggerToast(adminCleanupToast('Depoimento removido.', result.cleanup));
+
       const historyEntry = {
         action: 'Depoimento Removido',
         details: `Depoimento de "${testimonial.name}" foi removido manualmente.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
-    } else {
-      triggerToast(`Erro ao deletar: ${error.message}`, 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao deletar.';
+      triggerToast(`Erro ao deletar: ${message}`, 'error');
     }
   }, [testimonials]);
 
@@ -2013,28 +2008,25 @@ export default function Dashboard() {
     const cand = findCandidateById(id);
     if (!cand) return;
 
-    const { error } = await supabase
-      .from('talentos')
-      .delete()
-      .eq('id', id);
-
-    if (!error) {
+    try {
+      const result = await deleteAdminContent('talento', id);
       setCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
       setGalleryTalents(prev => prev.filter(c => String(c.id) !== String(id)));
       setRejectedCandidates(prev => prev.filter(c => String(c.id) !== String(id)));
       setSelectedCandidate(prev => (prev && String(prev.id) === String(id) ? null : prev));
       setEditingCandidate(prev => (prev && String(prev.id) === String(id) ? null : prev));
-      triggerToast('Currículo removido.');
+      triggerToast(adminCleanupToast('Currículo removido.', result.cleanup));
       setConfirmAction(null);
-      
+
       const historyEntry = {
         action: 'Candidato Removido',
         details: `Currículo de "${cand.name}" foi removido manualmente.`
       };
       const { data: hData } = await supabase.from('history').insert(historyEntry).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
-    } else {
-      triggerToast(`Erro ao deletar: ${error.message}`, 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao deletar.';
+      triggerToast(`Erro ao deletar: ${message}`, 'error');
     }
   }, [findCandidateById]);
 
@@ -2190,18 +2182,19 @@ export default function Dashboard() {
   const deleteNegocio = React.useCallback(async (id: string | number) => {
     const negocio = negocios.find(n => String(n.id) === String(id));
     if (!negocio) return;
-    const { error } = await supabase.from('negocios').delete().eq('id', id);
-    if (!error) {
+    try {
+      const result = await deleteAdminContent('negocio', id);
       setNegocios(prev => prev.filter(n => String(n.id) !== String(id)));
-      triggerToast('Negócio removido.');
+      triggerToast(adminCleanupToast('Negócio removido.', result.cleanup));
       const { data: hData } = await supabase.from('history').insert({
         action: 'Negócio Removido',
         details: `Negócio "${negocio.title}" foi removido manualmente.`
       }).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
       setConfirmAction(null);
-    } else {
-      triggerToast(error ? `Erro: ${error.message}` : 'Erro ao deletar.', 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao deletar.';
+      triggerToast(`Erro: ${message}`, 'error');
     }
   }, [negocios]);
 
@@ -2312,7 +2305,6 @@ export default function Dashboard() {
   const updateNoticia = React.useCallback(async (updatedNoticia: Noticia) => {
     const uploaded: StorageObjectRef[] = [];
     try {
-      let imageUrl = updatedNoticia.image_url || '';
       if (newsImageFile) {
         const imageRef = await uploadPublicImage({
           category: UPLOAD_CATEGORY_IDS.newsImage,
@@ -2320,8 +2312,32 @@ export default function Dashboard() {
           originalName: newsImageFile.name,
         });
         uploaded.push(imageRef);
-        imageUrl = imageRef.publicUrl || imageRef.path;
-      } else if (imageUrl.startsWith('blob:')) {
+        const imageUrl = imageRef.publicUrl || imageRef.path;
+        const result = await updateAdminNoticiaWithImage<Noticia>({
+          id: updatedNoticia.id,
+          title: updatedNoticia.title,
+          content: updatedNoticia.content,
+          excerpt: updatedNoticia.excerpt,
+          image_url: imageUrl,
+          author: updatedNoticia.author,
+          category: updatedNoticia.category,
+        });
+        setNoticias(prev => prev.map(n => n.id === result.record.id ? result.record : n));
+        setEditingNoticia(null);
+        setNewsImageFile(null);
+        const { data: hData } = await supabase.from('history').insert({
+          action: 'Notícia Editada',
+          details: `Notícia "${result.record.title}" foi atualizada.`
+        }).select().single();
+        if (hData) setHistory(prev => [hData, ...prev]);
+        if (result.cleanup === 'partial') {
+          triggerToast(adminCleanupToast('Notícia atualizada.', result.cleanup));
+        }
+        return;
+      }
+
+      let imageUrl = updatedNoticia.image_url || '';
+      if (imageUrl.startsWith('blob:')) {
         imageUrl = '';
       }
 
@@ -2355,8 +2371,8 @@ export default function Dashboard() {
   const deleteNoticia = React.useCallback(async (id: string | number) => {
     const noticia = noticias.find(n => n.id === id);
     if (!noticia) return;
-    const { error } = await supabase.from('noticias').delete().eq('id', id);
-    if (!error) {
+    try {
+      const result = await deleteAdminContent('noticia', id);
       setNoticias(prev => prev.filter(n => n.id !== id));
       const { data: hData } = await supabase.from('history').insert({
         action: 'Notícia Removida',
@@ -2364,6 +2380,12 @@ export default function Dashboard() {
       }).select().single();
       if (hData) setHistory(prev => [hData, ...prev]);
       setConfirmAction(null);
+      if (result.cleanup === 'partial') {
+        triggerToast(adminCleanupToast('Notícia removida.', result.cleanup));
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao excluir notícia.';
+      triggerToast(`Erro ao excluir notícia: ${message}`, 'error');
     }
   }, [noticias]);
 

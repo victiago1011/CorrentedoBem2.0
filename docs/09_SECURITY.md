@@ -133,11 +133,15 @@ Atualmente existem:
 /api/storage/upload
 
 /api/storage/signed-url
+
+/api/admin/content
 ```
 
 `/api/storage/upload` aceita apenas categorias da whitelist. O cliente não escolhe bucket nem path. `news-image` exige admin autenticado. A chave `SUPABASE_SERVICE_ROLE_KEY` permanece só no servidor (`lib/supabase-admin.ts`). O token de aborto usa `STORAGE_ABORT_SECRET`, também só no servidor.
 
 `/api/storage/signed-url` gera URL de 120 segundos depois de confirmar que o arquivo pertence a um registro autorizado (`recordId` + índice). Não aceita path arbitrário.
+
+`DELETE /api/admin/content` exige Admin autenticado. O frontend envia só `type` e `id`. O servidor lê as referências no banco, valida bucket/prefixo e só então remove objetos do Storage. Base64 e URLs externas não são apagadas. `PATCH /api/admin/content` atualiza notícia com nova imagem no mesmo UPDATE; a imagem antiga só é removida se o UPDATE confirmar.
 
 Antes de alterar qualquer rota verificar:
 
