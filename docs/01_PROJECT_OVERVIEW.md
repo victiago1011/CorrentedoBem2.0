@@ -158,6 +158,7 @@ Usado para:
 - **Banco de dados PostgreSQL** — todas as tabelas de conteúdo
 - **Autenticação** — login do painel admin
 - **RLS (Row Level Security)** — políticas de acesso às tabelas
+- **Storage** — imagens públicas no bucket `public-media` e documentos privados no bucket `private-documents`
 
 Variáveis necessárias:
 
@@ -237,7 +238,7 @@ Estas são situações reais do código hoje — não são bugs urgentes, mas de
 | **Admin** | Arquivo `app/admin/page.tsx` muito grande (~5.300 linhas) |
 | **Segurança** | Rotas de API de e-mail sem autenticação |
 | **RLS** | Políticas muito permissivas em algumas tabelas |
-| **Arquivos** | Logos e anexos salvos como base64 no banco (não usa Supabase Storage) |
+| **Arquivos** | Novos uploads usam Supabase Storage (`public-media` / `private-documents`). O legado Base64 foi migrado em 17/09/2026 (95 arquivos; ~39,86 MB decodificados). Permanece uma exceção histórica de currículo HTML em Base64; a leitura Base64 no código é só compatibilidade temporária |
 | **Componentes** | Muita lógica duplicada entre páginas (helpers repetidos) |
 | **Status** | Valores `approved` e `active` usados de forma inconsistente |
 | **Dependências** | Alguns pacotes instalados mas não usados (`@google/genai`, `react-hook-form`, etc.) |

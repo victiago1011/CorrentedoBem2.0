@@ -48,7 +48,7 @@ O projeto é uma aplicação web **monolítica** construída com **Next.js 15 (A
 | Busca de dados | Feita no **navegador**, via cliente Supabase |
 | Autenticação admin | **Supabase Auth**, verificada no cliente (sem middleware Next.js) |
 | E-mail | Enviado por **API Routes** que chamam a API HTTP do Resend |
-| Arquivos (fotos, logos, CVs) | Novos envios passam por `/api/storage/upload` (Supabase Storage). Registros antigos em Base64 continuam válidos. |
+| Arquivos (fotos, logos, CVs) | Novos envios usam **Supabase Storage** via `/api/storage/upload`. Imagens públicas em `public-media`; documentos privados em `private-documents`, lidos por signed URL. Base64 **não** é o armazenamento corrente. |
 | Deploy | Build configurado como `output: 'standalone'` em `next.config.ts` |
 
 ---
@@ -66,6 +66,7 @@ CorrentedoBem/
 ├── SUPABASE_LGPD_CONSENT_FASE2.sql # Consentimento Fase 2 + prazo de 6 meses
 ├── SUPABASE_NEWSLETTER.sql # Script SQL da tabela de newsletter
 ├── SUPABASE_ANALYTICS.sql  # Script SQL da tabela de analytics
+├── scripts/                # Ferramentas one-off (ex.: auditoria de Base64 legado)
 ├── next.config.ts          # Configuração do Next.js
 ├── package.json            # Dependências
 └── .env.example            # Referência de variáveis de ambiente
@@ -90,7 +91,7 @@ Contém **tudo** que o Next.js serve: páginas públicas, painel admin, rotas de
 | `admin-content-api.ts` | Cliente do Admin para DELETE/PATCH em `/api/admin/content` |
 | `public-content.ts` | Whitelist e INSERT server-side dos cadastros públicos (`server-only`) |
 | `public-content-api.ts` | Cliente dos formulários públicos para `POST /api/public/content` |
-| `media-src.ts` | Compatibilidade Base64 / URL pública / path privado |
+| `media-src.ts` | Resolução de mídia: URL pública, path privado e compatibilidade temporária de leitura Base64 |
 | `utils.ts` | Funções utilitárias: `cn`, `maskPhone`, `maskCurrency`, `ensureExternalLink`, `stripHtml` |
 
 ### `hooks/`
@@ -276,9 +277,19 @@ export const supabase = createClient(
 
 ### Armazenamento de arquivos
 
-Novos envios usam **Supabase Storage** (`public-media` e `private-documents`) via `/api/storage/upload`. Valores antigos em Base64 e URLs externas (ex.: Gravatar) continuam válidos na leitura.
+Novos envios usam **Supabase Storage** via `/api/storage/upload`:
 
-A exclusão administrativa de Talentos, Vagas, Negócios, Notícias e Depoimentos passa por `DELETE /api/admin/content`: o servidor lê o registro, apaga a linha no banco e, só então, remove objetos reconhecidos do Storage. Base64, Gravatar e URLs que não sejam do nosso Storage não são enviados a `storage.remove`. Não há varredura de órfãos. Falha parcial do cleanup não restaura o registro.
+- imagens e logos públicos no bucket `public-media`;
+- documentos privados (currículos e anexos) no bucket `private-documents`;
+- documentos privados são lidos por signed URL em `/api/storage/signed-url` (120 segundos), após conferir o registro no banco.
+
+O ciclo de vida administrativo remove objetos **próprios** do Storage: `DELETE /api/admin/content` (exclusão e Recusar) apaga a linha no banco e, só então, tenta `storage.remove` nos paths reconhecidos daquele registro. Na substituição de mídia (ex.: nova imagem de notícia em `PATCH /api/admin/content`), o objeto anterior só é removido depois do UPDATE confirmado. Base64 residual, Gravatar e URLs que não sejam do nosso Storage não são enviados a `storage.remove`. Não há varredura de órfãos. Falha parcial do cleanup não restaura o registro.
+
+O legado Base64 nas colunas de mídia foi migrado em **17/09/2026**: 95 arquivos históricos passaram ao Storage (~39,86 MB de conteúdo decodificado). A migração encerrou com 0 arquivos válidos pendentes. Permanece **uma** exceção histórica conhecida: um currículo HTML de 2113 bytes gravado como `application/msword` em Base64 (`talentos.cv_url`). Essa exceção não deve ser migrada nem aceita como upload novo; a assinatura de arquivo (`file-signature`) não deve ser afrouxada para HTML.
+
+A leitura de Base64 em `lib/media-src.ts` pode permanecer temporariamente para essa exceção e para qualquer residual. Isso **não** significa que Base64 seja o armazenamento corrente.
+
+O script `scripts/migrate-base64-to-storage.ts` permanece versionado como registro técnico, auditoria/dry-run (padrão) e ferramenta idempotente. Escrita exige `--execute --confirm=MIGRATE_BASE64`. Relatórios e manifestos ficam fora do Git (`scripts/reports/`, `scripts/manifests/`).
 
 No painel, **Recusar** Talento, Vaga, Negócio ou Depoimento usa essa mesma operação. Os dados do e-mail de recusa ficam em memória; o e-mail é enviado só depois do DELETE confirmado. Falha no e-mail não recria o cadastro. Cadastros antigos com `status = rejected` podem permanecer até exclusão manual. Não há recuperação de recusa no painel atual.
 

@@ -85,7 +85,7 @@ Não altera `published_at`, consentimento, status nem registros com janela NULL.
 
 Exibidos quando `status = 'active'` e (`expires_at IS NULL` ou `expires_at > now()`). Não há cron nem exclusão física. O Admin continua vendo o registro.
 
-Não existe rotina automática nem varredura de órfãos. Foto, currículo, logo e anexos podem estar em Base64 (registros antigos), URL pública do bucket `public-media` ou path privado em `private-documents`.
+Não existe rotina automática nem varredura de órfãos. Foto, currículo, logo e anexos novos ficam no Supabase Storage: URL pública do bucket `public-media` ou path privado em `private-documents`. O legado Base64 dessas colunas foi migrado em 17/09/2026 (95 arquivos; ~39,86 MB decodificados; 0 arquivos válidos pendentes). Permanece uma exceção histórica: currículo HTML de 2113 bytes em Base64 em `talentos.cv_url`. URLs externas (ex.: Gravatar) continuam como referências fora do Storage.
 
 Quando o Admin exclui um registro pelas telas do painel, `DELETE /api/admin/content` remove a linha no banco e, se o DELETE confirmar, tenta apagar apenas objetos reconhecidos do Storage daquele registro. Falha no Storage não desfaz a exclusão do banco.
 
